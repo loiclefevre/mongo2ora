@@ -2,17 +2,17 @@
   "resources":{
   "includes":[
     {
+      "pattern":"\\Qnet/rubygrapefruit/platform/linux-aarch64-ncurses6/libnative-platform-curses.so\\E"
+    }, 
+    {
       "pattern":"\\Qnet/rubygrapefruit/platform/linux-aarch64/libnative-platform.so\\E"
     }, 
     {
-      "pattern":"\\Qnet/rubygrapefruit/platform/linux-aarch64-ncurses6/libnative-platform-curses.so\\E"
-    },
+      "pattern":"\\Qnet/rubygrapefruit/platform/linux-amd64-ncurses6/libnative-platform-curses.so\\E"
+    }, 
     {
       "pattern":"\\Qnet/rubygrapefruit/platform/linux-amd64/libnative-platform.so\\E"
-    },
-    {
-      "pattern":"\\Qnet/rubygrapefruit/platform/linux-amd64-ncurses6/libnative-platform-curses.so\\E"
-    },
+    }, 
     {
       "pattern":"\\Qnet/rubygrapefruit/platform/osx-aarch64/libnative-platform-curses.dylib\\E"
     }, 

@@ -8,6 +8,10 @@
   "methods":[{"name":"<init>","parameterTypes":["java.lang.String"] }]
 },
 {
+  "name":"net.rubygrapefruit.platform.internal.FileStat",
+  "methods":[{"name":"details","parameterTypes":["int","int","int","int","long","long","int"] }]
+},
+{
   "name":"sun.instrument.InstrumentationImpl",
   "methods":[
     {"name":"<init>","parameterTypes":["long","boolean","boolean"] }, 
