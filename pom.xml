@@ -50,7 +50,17 @@
         </dependency>
         <dependency>
             <groupId>net.rubygrapefruit</groupId>
+            <artifactId>native-platform-linux-amd64-ncurses6</artifactId>
+            <version>0.22-milestone-23</version>
+        </dependency>
+        <dependency>
+            <groupId>net.rubygrapefruit</groupId>
             <artifactId>native-platform-linux-aarch64</artifactId>
+            <version>0.22-milestone-23</version>
+        </dependency>
+        <dependency>
+            <groupId>net.rubygrapefruit</groupId>
+            <artifactId>native-platform-linux-aarch64-ncurses6</artifactId>
             <version>0.22-milestone-23</version>
         </dependency>
         <dependency>
