@@ -1,0 +1,179 @@
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.oracle</groupId>
+    <artifactId>mongo2ora</artifactId>
+    <version>0.0.1</version>
+    <packaging>jar</packaging>
+
+    <name>mongo2ora</name>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <main.class>com.oracle.mongo2ora.Main</main.class>
+        <graalvm.version>22.1.0</graalvm.version>
+
+        <targetJavaVersion>17</targetJavaVersion>
+        <maven.compiler.source>${targetJavaVersion}</maven.compiler.source>
+        <maven.compiler.target>${targetJavaVersion}</maven.compiler.target>
+        <maven.compiler.release>${targetJavaVersion}</maven.compiler.release>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>net.rubygrapefruit</groupId>
+            <artifactId>native-platform</artifactId>
+            <version>0.22-milestone-23</version>
+        </dependency>
+        <dependency>
+            <groupId>net.rubygrapefruit</groupId>
+            <artifactId>native-platform-windows-amd64</artifactId>
+            <version>0.22-milestone-23</version>
+        </dependency>
+        <dependency>
+            <groupId>net.rubygrapefruit</groupId>
+            <artifactId>native-platform-osx-amd64</artifactId>
+            <version>0.22-milestone-23</version>
+        </dependency>
+        <dependency>
+            <groupId>net.rubygrapefruit</groupId>
+            <artifactId>native-platform-osx-aarch64</artifactId>
+            <version>0.22-milestone-23</version>
+        </dependency>
+        <dependency>
+            <groupId>net.rubygrapefruit</groupId>
+            <artifactId>native-platform-linux-amd64</artifactId>
+            <version>0.22-milestone-23</version>
+        </dependency>
+        <dependency>
+            <groupId>net.rubygrapefruit</groupId>
+            <artifactId>native-platform-linux-aarch64</artifactId>
+            <version>0.22-milestone-23</version>
+        </dependency>
+        <dependency>
+            <groupId>org.graalvm.sdk</groupId>
+            <artifactId>graal-sdk</artifactId>
+            <version>${graalvm.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.graalvm.nativeimage</groupId>
+            <artifactId>svm</artifactId>
+            <version>${graalvm.version}</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <repositories>
+        <repository>
+            <id>gradle-release</id>
+            <url>https://repo.gradle.org/artifactory/libs-releases</url>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>graalvm-native-build-tools-snapshots</id>
+            <name>GraalVM native-build-tools Snapshots</name>
+            <url>https://raw.githubusercontent.com/graalvm/native-build-tools/snapshots</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+    </pluginRepositories>
+
+    <build>
+        <extensions>
+            <extension>
+                <groupId>kr.motd.maven</groupId>
+                <artifactId>os-maven-plugin</artifactId>
+                <version>1.6.1</version>
+            </extension>
+        </extensions>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+            </plugin>
+<!--            <plugin>
+                <groupId>org.graalvm.nativeimage</groupId>
+                <artifactId>native-image-maven-plugin</artifactId>
+                <version>21.2.0</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>native-image</goal>
+                        </goals>
+                        <phase>verify</phase>
+                    </execution>
+                </executions>
+                <configuration>
+                    <skip>false</skip>
+                    <imageName>mongo2ora-${os.detected.classifier}</imageName>
+                    <mainClass>com.oracle.mongo2ora.Main</mainClass>
+                    <buildArgs>
+                        - -no-fallback
+                        -H:+ReportExceptionStackTraces
+                        - -link-at-build-time
+                        - -report-unsupported-elements-at-runtime
+                        - -enable-all-security-services
+                        -H:EnableURLProtocols=https
+                        -H:ConfigurationFileDirectories=../src/main/resources/META-INF/native-image
+                        -H:-CheckToolchain
+                        - -initialize-at-build-time=sun.instrument.InstrumentationImpl
+                    </buildArgs>
+                </configuration>
+            </plugin> -->
+            <plugin>
+                <groupId>org.graalvm.buildtools</groupId>
+                <artifactId>native-maven-plugin</artifactId>
+                <version>0.9.12</version> <!-- see: https://graalvm.github.io/native-build-tools/latest/index.html -->
+                <extensions>true</extensions>
+                <executions>
+                    <execution>
+                        <id>build-native</id>
+                        <goals>
+                            <goal>build</goal>
+                        </goals>
+                        <phase>package</phase>
+                    </execution>
+                    <execution>
+                        <id>test-native</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <phase>test</phase>
+                    </execution>
+                </executions>
+                <configuration>
+                    <skip>false</skip>
+                    <imageName>mongo2ora-${os.detected.classifier}</imageName>
+                    <mainClass>com.oracle.mongo2ora.Main</mainClass>
+                    <quickBuild>true</quickBuild>
+                    <verbose>true</verbose>
+                    <fallback>false</fallback>
+                    <useArgFile>false</useArgFile>
+                    <buildArgs>
+                        <buildArg>--no-fallback</buildArg>
+                        <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                        <buildArg>--link-at-build-time</buildArg>
+                        <buildArg>--report-unsupported-elements-at-runtime</buildArg>
+                        <buildArg>--enable-all-security-services</buildArg>
+                        <buildArg>-H:EnableURLProtocols=https</buildArg>
+                        <buildArg>-H:ConfigurationFileDirectories=../src/main/resources/META-INF/native-image</buildArg>
+                        <buildArg>-H:-CheckToolchain</buildArg>
+                        <buildArg>--initialize-at-build-time=sun.instrument.InstrumentationImpl</buildArg>
+                    </buildArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

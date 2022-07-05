@@ -1,0 +1,27 @@
+{
+  "resources":{
+  "includes":[
+    {
+      "pattern":"\\Qnet/rubygrapefruit/platform/linux-aarch64/libnative-platform.so\\E"
+    }, 
+    {
+      "pattern":"\\Qnet/rubygrapefruit/platform/linux-amd64/libnative-platform.so\\E"
+    }, 
+    {
+      "pattern":"\\Qnet/rubygrapefruit/platform/osx-aarch64/libnative-platform-curses.dylib\\E"
+    }, 
+    {
+      "pattern":"\\Qnet/rubygrapefruit/platform/osx-aarch64/libnative-platform.dylib\\E"
+    }, 
+    {
+      "pattern":"\\Qnet/rubygrapefruit/platform/osx-amd64/libnative-platform-curses.dylib\\E"
+    }, 
+    {
+      "pattern":"\\Qnet/rubygrapefruit/platform/osx-amd64/libnative-platform.dylib\\E"
+    }, 
+    {
+      "pattern":"\\Qnet/rubygrapefruit/platform/windows-amd64/native-platform.dll\\E"
+    }
+  ]},
+  "bundles":[]
+}
