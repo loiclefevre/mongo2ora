@@ -1,0 +1,474 @@
+package com.oracle.mongo2ora.migration.oracle;
+
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoCursor;
+import com.oracle.mongo2ora.asciigui.ASCIIGUI;
+import oracle.soda.OracleCollection;
+import oracle.soda.OracleDatabase;
+import oracle.soda.OracleException;
+import oracle.soda.rdbms.OracleRDBMSClient;
+import oracle.ucp.jdbc.PoolDataSource;
+import org.bson.Document;
+
+import java.sql.*;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeMap;
+
+import static com.oracle.mongo2ora.util.Tools.getDurationSince;
+
+public class OracleCollectionInfo {
+
+	private final String user;
+	private final String collectionName;
+	public String isJsonConstraintName;
+	private boolean isJsonConstraintEnabled;
+	private String isJsonConstraintText;
+	private boolean isJsonConstraintIsOSONFormat;
+
+	private String primaryKeyIndexName;
+	private String primaryKeyIndexStatus;
+	public boolean emptyDestinationCollection;
+	//public boolean needSearchIndex;
+
+	public OracleCollectionInfo(String user, String collectionName) {
+		this.user = user;
+		this.collectionName = collectionName;
+	}
+
+
+	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection, MongoCollection<Document> mongoCollection) throws SQLException, OracleException {
+		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName);
+
+		try (Connection c = adminPDS.getConnection()) {
+			try (Statement s = c.createStatement()) {
+				s.execute("grant execute on CTX_DDL to " + user);
+				s.execute("grant create job to " + user);
+			}
+
+			try (Connection userConnection = pds.getConnection()) {
+				// SODA: ensure the collection do exists!
+				final Properties props = new Properties();
+				props.put("oracle.soda.sharedMetadataCache", "true");
+				props.put("oracle.soda.localMetadataCache", "true");
+
+				final OracleRDBMSClient cl = new OracleRDBMSClient(props);
+				final OracleDatabase db = cl.getDatabase(userConnection);
+				OracleCollection sodaCollection = db.openCollection(collectionName);
+
+
+				ret.emptyDestinationCollection = true;
+
+				if (sodaCollection == null) {
+					//System.out.println("SODA collection does not exist => creating it");
+					sodaCollection = db.admin().createCollection(collectionName);
+					if(sodaCollection == null) {
+						throw new IllegalStateException("Can't create SODa collection: "+collectionName);
+					}
+				} else {
+					try (Statement s = userConnection.createStatement()) {
+						try (ResultSet r = s.executeQuery("select count(ID) from " + collectionName + " where rownum = 1")) {
+							if (r.next() && r.getInt(1) == 1) {
+								// THERE IS AT LEAST ONE ROW!
+								if (dropAlreadyExistingCollection) {
+									//System.out.println("SODA collection does exist => dropping it (required with --drop CLI argument)");
+									sodaCollection.admin().drop();
+									//System.out.println("SODA collection does exist => re-creating it");
+									sodaCollection = db.admin().createCollection(collectionName);
+								} else {
+									// avoid migrating data into non empty destination collection (no conflict to
+									// manage)
+									ret.emptyDestinationCollection = false;
+									return ret;
+								}
+							} else {
+								if (dropAlreadyExistingCollection) {
+									//System.out.println("SODA collection does exist (with 0 row) => dropping it (required with --drop CLI argument)");
+									sodaCollection.admin().drop();
+									//System.out.println("SODA collection does exist => re-creating it");
+									sodaCollection = db.admin().createCollection(collectionName);
+								}
+							}
+						}
+/*
+                        for (Document indexMetadata : mongoCollection.listIndexes()) {
+                            if (indexMetadata.getString("name").contains("$**") || "text".equals(indexMetadata.getEmbedded(Arrays.asList("key"), Document.class).getString("_fts"))) {
+                                ret.needSearchIndex = true;
+                            }
+                        }
+
+/*                        if (ret.needSearchIndex) {
+                            long start = System.currentTimeMillis();
+                            s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (json_document) FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(MANUAL)')", collectionName, collectionName));
+                            System.out.println("Created Search Index (manual sync) in " + getDurationSince(start));
+                        } */
+					}
+				}
+			}
+
+			try (PreparedStatement p = c.prepareStatement("select constraint_name, search_condition, status from all_constraints where owner=? and table_name=? and constraint_type='C'")) {
+				p.setString(1, user);
+				p.setString(2, collectionName.toUpperCase());
+
+				try (ResultSet r = p.executeQuery()) {
+					while (r.next()) {
+						final String constraintText = r.getString(2);
+						final String condition = constraintText.toLowerCase();
+						if (condition.contains("is json") && condition.contains("json_document")) {
+							ret.isJsonConstraintName = r.getString(1);
+							ret.isJsonConstraintEnabled = r.getString(3).equalsIgnoreCase("ENABLED");
+							ret.isJsonConstraintText = constraintText;
+							ret.isJsonConstraintIsOSONFormat = condition.contains("format oson");
+//							System.out.println("IS JSON constraint found: " + ret.isJsonConstraintName + " for collection " + collectionName);
+							break;
+						}
+					}
+				}
+
+				if (ret.isJsonConstraintName != null) {
+//					System.out.println("Disabling Is JSON constraint: " + ret.isJsonConstraintName);
+					p.execute("alter table " + user + "." + collectionName + " disable constraint " + ret.isJsonConstraintName);
+				}
+			}
+
+			try (PreparedStatement p = c.prepareStatement("select index_name, status from all_indexes where table_owner=? and table_name=? and uniqueness='UNIQUE' and constraint_index='YES'")) {
+				p.setString(1, user);
+				p.setString(2, collectionName.toUpperCase());
+
+				try (ResultSet r = p.executeQuery()) {
+					if (r.next()) {
+						ret.primaryKeyIndexName = r.getString(1);
+						ret.primaryKeyIndexStatus = r.getString(2);
+//						System.out.println("Primary key found: " + ret.primaryKeyIndexName + " for collection " + collectionName + " with status " + ret.primaryKeyIndexStatus);
+					}
+				}
+
+				if(ret.primaryKeyIndexName != null) {
+//					System.out.println("Dropping primary key and associated index: "+ret.primaryKeyIndexName+" for collection "+collectionName);
+//					System.out.println("Running: "+"alter table "+user+"."+collectionName+" drop primary key drop index");
+					p.execute("alter table "+user+"."+collectionName+" drop primary key drop index");
+//					System.out.println("Running: "+"alter table "+user+"."+collectionName+" drop primary key drop index DONE!");
+				}
+			}
+		}
+
+		return ret;
+	}
+
+	/**
+	 * Using medium service reconfigured with standard user.
+	 *
+	 * @param mediumPDS
+	 * @param mongoCollection
+	 * @throws SQLException
+	 */
+	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, int maxParallelDegree, ASCIIGUI gui) throws SQLException, OracleException {
+		try (Connection c = mediumPDS.getConnection()) {
+			try (Statement s = c.createStatement()) {
+//				System.out.print("Enabling JSON constraint...");
+				System.out.flush();
+				if (isJsonConstraintName != null) {
+//					System.out.println("Re-Enabling Is JSON constraint NOVALIDATE");
+					s.execute("alter table " + collectionName + " modify constraint " + isJsonConstraintName + " enable novalidate");
+				} else {
+//					System.out.println("Creating Is JSON constraint NOVALIDATE");
+					s.execute("alter table " + collectionName + " add constraint " + collectionName + "_jd_is_json check (json_document is json format oson (size limit 32m)) novalidate");
+				}
+//				System.out.println("OK");
+
+//				gui.startIndex("primary key");
+
+//				System.out.print("Adding primary key constraint and index...");
+//				System.out.flush();
+				// MOS 473656.1
+				s.execute("ALTER SESSION ENABLE PARALLEL DDL");
+				long start = System.currentTimeMillis();
+				if (primaryKeyIndexName != null) {
+					String currentPKIndexStatus = "?";
+					try (PreparedStatement p = c.prepareStatement("select status from all_indexes where table_owner=? and table_name=? and index_name=? and uniqueness='UNIQUE' and constraint_index='YES'")) {
+						p.setString(1, user);
+						p.setString(2, collectionName.toUpperCase());
+						p.setString(3, primaryKeyIndexName);
+
+						try (ResultSet r = p.executeQuery()) {
+							if (r.next()) {
+								currentPKIndexStatus = r.getString(1);
+							}
+						}
+					}
+
+					if ("UNUSABLE".equalsIgnoreCase(currentPKIndexStatus)) {
+
+/*                        System.out.println("CREATE UNIQUE INDEX "+user+"."+primaryKeyIndexName+" ON "+user+"."+collectionName+"(ID) PARALLEL"+(maxParallelDegree == -1 ? "" : " "+maxParallelDegree));
+                        s.execute("CREATE UNIQUE INDEX "+user+"."+primaryKeyIndexName+" ON "+user+"."+collectionName+"(ID) PARALLEL"+(maxParallelDegree == -1 ? "" : " "+maxParallelDegree));
+                        System.out.println("ALTER TABLE "+user+"."+collectionName+" ADD CONSTRAINT "+primaryKeyIndexName+" PRIMARY KEY (ID) USING INDEX "+user+"."+primaryKeyIndexName+" ENABLE NOVALIDATE");
+                        s.execute("ALTER TABLE "+user+"."+collectionName+" ADD CONSTRAINT "+primaryKeyIndexName+" PRIMARY KEY (ID) USING INDEX "+user+"."+primaryKeyIndexName+" ENABLE NOVALIDATE");
+                        System.out.println("Created PK constraint and index with parallel degree of "+maxParallelDegree+" in "+ getDurationSince(start)); */
+
+//						System.out.println("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+						s.execute("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+//						System.out.println("Rebuild PK index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+					} else {
+//						System.out.println("PK Index status is: " + currentPKIndexStatus);
+					}
+				} else {
+					try {
+//						System.out.println("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON " + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+						s.execute("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON " + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+//						System.out.println("ALTER TABLE " + collectionName + " ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
+						s.execute("ALTER TABLE " + collectionName + " ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
+//						System.out.println("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+					} catch (SQLException sqle) {
+						sqle.printStackTrace();
+					}
+				}
+
+//				gui.endIndex("primary key");
+				gui.addNewDestinationDatabaseIndex();
+
+				// manage other MongoDB indexes
+				final Properties props = new Properties();
+				props.put("oracle.soda.sharedMetadataCache", "true");
+				props.put("oracle.soda.localMetadataCache", "true");
+
+				final OracleRDBMSClient cl = new OracleRDBMSClient(props);
+				final OracleDatabase db = cl.getDatabase(c);
+				final OracleCollection sodaCollection = db.openCollection(collectionName);
+
+				final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
+
+				try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( json_document, dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + ")\n" +
+						"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
+					while (r.next()) {
+						String key = r.getString(1);
+						if(!r.wasNull()) {
+							fieldsInfo.put(key, new FieldInfo(key, r.getString(2), r.getInt(3)));
+						}
+					}
+				}
+
+				boolean needSearchIndex = false;
+
+				for (Document indexMetadata : mongoCollection.listIndexes()) {
+					//System.out.println(indexMetadata);
+					if (indexMetadata.getString("name").contains("$**") || "text".equals(indexMetadata.getEmbedded(Arrays.asList("key"), Document.class).getString("_fts"))) {
+						needSearchIndex = true; //System.out.println("Need Search Index");
+					} else if (indexMetadata.getString("name").equals("_id_")) {
+						// skipping primary key as it already exists!
+						continue;
+					} else {
+						final Document keys = indexMetadata.getEmbedded(Arrays.asList("key"), Document.class);
+						boolean spatial = false;
+						String spatialColumn = "";
+						for (String key : keys.keySet()) {
+							final Object value = keys.get(key);
+							if (value instanceof Integer) continue;
+							if (value instanceof String) {
+								if ("2dsphere".equals((String) value)) {
+									spatialColumn = key;
+									spatial = true;
+									break;
+								}
+							}
+						}
+
+						if (spatial) {
+//							System.out.println("Spatial index");
+							final MongoCursor<Document> cursor = mongoCollection.find(new Document(spatialColumn + ".type", "Point")).projection(new Document(spatialColumn + ".type", 1)).batchSize(100).limit(100).cursor();
+
+							boolean allDocsHavePoints = false;
+
+							int numberOfDocsWithPoint = 0;
+							while (cursor.hasNext()) {
+								cursor.next();
+								numberOfDocsWithPoint++;
+							}
+
+							allDocsHavePoints = numberOfDocsWithPoint == 100;
+
+							final String SQLStatement = String.format(
+									"create index %s on %s " +
+											"(JSON_VALUE(JSON_DOCUMENT, '$.%s' returning SDO_GEOMETRY ERROR ON ERROR NULL ON EMPTY)) " +
+											"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getString("name"), collectionName, spatialColumn);
+
+							//System.out.println(SQLStatement);
+							start = System.currentTimeMillis();
+//							gui.startIndex(indexMetadata.getString("name"));
+							s.execute(SQLStatement);
+//							System.out.println("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+//							gui.endIndex(indexMetadata.getString("name"));
+						} else {
+//							System.out.println("Normal index");
+							final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getString("name"), getCreateIndexColumns(collectionName, keys, fieldsInfo), indexMetadata.getBoolean("unique"));
+
+//							System.out.println(indexSpec);
+							start = System.currentTimeMillis();
+//							gui.startIndex(indexMetadata.getString("name"));
+							sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
+//							System.out.println("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+//							gui.endIndex(indexMetadata.getString("name"));
+						}
+					}
+				}
+
+				if (needSearchIndex) {
+                    /*try (CallableStatement cs = c.prepareCall("{CALL CTX_DDL.SYNC_INDEX(idx_name => ?, memory => '512M', parallel_degree => ?, locking => CTX_DDL.LOCK_NOWAIT)}")) {
+                        cs.setString(1, collectionName + "$search_index");
+                        cs.setInt(2, maxParallelDegree);
+                        start = System.currentTimeMillis();
+                        cs.execute();
+                        System.out.println("Manual sync of Search Index done in " + getDurationSince(start));
+                    }*/
+
+					start = System.currentTimeMillis();
+//					gui.startIndex("search_index");
+					s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (json_document) FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
+//					System.out.println("Created Search Index (every 1s sync) in " + getDurationSince(start));
+//					gui.endIndex("search_index");
+				}
+
+				s.execute("ALTER SESSION DISABLE PARALLEL DDL");
+//				System.out.println("OK");
+
+			}
+		}
+	}
+
+	private String getCreateIndexColumns(String collectionName, Document keys, Map<String, FieldInfo> fieldsInfo) {
+		final StringBuilder s = new StringBuilder();
+
+		for (String columnName : keys.keySet()) {
+			if (s.length() > 0) {
+				s.append(", ");
+			}
+
+           /* if (cantIndex.contains(ic.name)) {
+                if (s.length() > 0) {
+                    s.setLength(s.length() - 2);
+                }
+
+                log.warn("For collection " + collectionName + ", the field " + ic.name + " has been removed from the index definition: Multi-value index not yet supported for index " + name + " on field " + ic.name + " which path belongs to an array");
+                warning = true;
+            }
+            else if (oracleMetadata.containsKey(collectionName + "." + ic.name + ".datatype")) {
+                final String dataType = (String) oracleMetadata.get(collectionName + "." + ic.name + ".datatype");
+
+                switch (dataType) {
+                    case "number":
+                        s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"number\"}");
+                        break;
+
+                    case "string":
+                        final String dataLength = (String) oracleMetadata.get(collectionName + "." + ic.name + ".maxlength");
+
+                        if (Integer.parseInt(dataLength) > INDEXED_FIELD_MAX_LENGTH_WARNING) {
+                            log.warn("For collection " + collectionName + ", index " + name + " has a string field \"" + ic.name + "\" with a maxlength (" + dataLength + " bytes, defined in oracle metadata file) strictly larger than the threshold " + INDEXED_FIELD_MAX_LENGTH_WARNING);
+                            warning = true;
+                        }
+
+                        s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"string\", \"maxlength\": ").append(dataLength).append("}");
+                        break;
+
+                    default:
+                        s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\"}");
+                        break;
+                }
+            }
+            else {
+                if (fieldsDataTypes.containsKey(ic.name)) {
+                    if (fieldsDataTypes.get(ic.name).size() == 1) {
+                        final String dataType = fieldsDataTypes.get(ic.name).iterator().next();
+                        if ("number".equals(dataType)) {
+                            s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"number\"}");
+                        }
+                        else if ("array".equals(dataType)) {
+                            // remove the trailing ", "
+                            if (s.length() > 0) {
+                                s.setLength(s.length() - 2);
+                            }
+
+                            log.warn("For collection " + collectionName + ", the field " + ic.name + " has been removed from the index definition: Multi-value index not yet supported for index " + name + " on field " + ic.name + " which is an array");
+                            warning = true;
+                            //s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"number\"}");
+                        }
+                        else {
+                            if (maxLengths.containsKey(ic.name)) {
+                                if (maxLengths.get(ic.name) > INDEXED_FIELD_MAX_LENGTH_WARNING) {
+                                    log.warn("For collection " + collectionName + ", index " + name + " has a string field \"" + ic.name + "\" with a maxlength (" + maxLengths.get(ic.name) + " bytes) strictly larger than the threshold " + INDEXED_FIELD_MAX_LENGTH_WARNING);
+                                    warning = true;
+                                }
+                                s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"string\", \"maxlength\": ").append(maxLengths.get(ic.name)).append("}");
+                            }
+                            else {
+                                s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\"}");
+                            }
+                        }
+                    }
+                    else {
+                        if (maxLengths.containsKey(ic.name)) {
+                            if (maxLengths.get(ic.name) > INDEXED_FIELD_MAX_LENGTH_WARNING) {
+                                log.warn("For collection " + collectionName + ", index " + name + " has a string field \"" + ic.name + "\" with a maxlength (" + maxLengths.get(ic.name) + " bytes) strictly larger than the threshold " + INDEXED_FIELD_MAX_LENGTH_WARNING);
+                                warning = true;
+                            }
+                            s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"string\", \"maxlength\": ").append(maxLengths.get(ic.name)).append("}");
+                        }
+                        else {
+                            s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"string\"}");
+                        }
+                    }
+                }
+                else if (maxLengths.containsKey(ic.name)) {
+                    if (maxLengths.get(ic.name) > INDEXED_FIELD_MAX_LENGTH_WARNING) {
+                        log.warn("For collection " + collectionName + ", index " + name + " has a field \"" + ic.name + "\" with a maxlength (" + maxLengths.get(ic.name) + " bytes) strictly larger than the threshold " + INDEXED_FIELD_MAX_LENGTH_WARNING);
+                        warning = true;
+                    }
+                    s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"maxlength\": ").append(maxLengths.get(ic.name)).append("}");
+                }
+                else {
+                    s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\"}");
+                }
+            }*/
+
+			final FieldInfo fi = fieldsInfo.get("$." + columnName);
+
+			if (fi == null) {
+				s.append("{\"path\": \"").append(columnName).append("\", \"order\": \"").append(keys.getInteger(columnName) == 1 ? "asc" : "desc").append("\"}");
+			} else {
+				s.append("{\"path\": \"").append(columnName).append("\", \"order\": \"").append(keys.getInteger(columnName) == 1 ? "asc" : "desc").append("\", \"datatype\": \"").append(fi.type).append("\"");
+				if ("string".equals(fi.type)) {
+					s.append(", \"maxlength\": ").append(fi.length);
+				}
+				s.append("}");
+			}
+
+		}
+
+		return s.toString();
+	}
+
+	public void dropSODACollection(PoolDataSource pds) throws SQLException, OracleException {
+		try (Connection userConnection = pds.getConnection()) {
+			final Properties props = new Properties();
+			props.put("oracle.soda.sharedMetadataCache", "true");
+			props.put("oracle.soda.localMetadataCache", "true");
+
+			final OracleRDBMSClient cl = new OracleRDBMSClient(props);
+			final OracleDatabase db = cl.getDatabase(userConnection);
+			final OracleCollection sodaCollection = db.openCollection(collectionName);
+			sodaCollection.admin().drop();
+		}
+	}
+
+	static class FieldInfo {
+		public String path;
+		public String type;
+		public int length;
+
+		public FieldInfo(String path, String type, int length) {
+			this.path = path;
+			this.type = type;
+			this.length = length;
+		}
+	}
+}

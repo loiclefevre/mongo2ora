@@ -15,6 +15,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <main.class>com.oracle.mongo2ora.Main</main.class>
         <graalvm.version>22.1.0</graalvm.version>
+        <oracle.jdbc.version>21.6.0.0.1</oracle.jdbc.version>
 
         <targetJavaVersion>17</targetJavaVersion>
         <maven.compiler.source>${targetJavaVersion}</maven.compiler.source>
@@ -23,6 +24,21 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.36</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>1.7.36</version>
+        </dependency>
+        <dependency>
+            <groupId>log4j</groupId>
+            <artifactId>log4j</artifactId>
+            <version>1.2.17</version>
+        </dependency>
         <dependency>
             <groupId>net.rubygrapefruit</groupId>
             <artifactId>native-platform</artifactId>
@@ -75,6 +91,82 @@
             <version>${graalvm.version}</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver-sync</artifactId>
+            <version>4.6.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.oracle.database.security</groupId>
+            <artifactId>oraclepki</artifactId>
+            <version>${oracle.jdbc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.oracle.database.security</groupId>
+            <artifactId>osdt_core</artifactId>
+            <version>${oracle.jdbc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.oracle.database.security</groupId>
+            <artifactId>osdt_cert</artifactId>
+            <version>${oracle.jdbc.version}</version>
+        </dependency>
+        <!-- dependency>
+            <groupId>com.oracle.database.observability</groupId>
+            <artifactId>dms</artifactId>
+            <version>${oracle.jdbc.version}</version>
+        </dependency -->
+        <!-- dependency>
+            <groupId>com.oracle.database.observability</groupId>
+            <artifactId>ojdbc11dms</artifactId>
+            <version>${oracle.jdbc.version}</version>
+        </dependency -->
+        <dependency>
+            <groupId>com.oracle.database.jdbc</groupId>
+            <artifactId>ojdbc11</artifactId>
+            <version>${oracle.jdbc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.oracle.database.xml</groupId>
+            <artifactId>xdb</artifactId>
+            <version>${oracle.jdbc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.oracle.database.jdbc</groupId>
+            <artifactId>ucp</artifactId>
+            <version>${oracle.jdbc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.oracle.database.ha</groupId>
+            <artifactId>ons</artifactId>
+            <version>${oracle.jdbc.version}</version>
+        </dependency>
+        <!--dependency>
+            <groupId>com.oracle.</groupId>
+            <artifactId>ojdl</artifactId>
+            <version>${oracle.jdbc.version}</version>
+        </dependency-->
+        <dependency>
+            <groupId>com.oracle.database.soda</groupId>
+            <artifactId>orajsoda</artifactId>
+            <version>1.1.7.1</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.oracle.database.jdbc</groupId>
+                    <artifactId>ojdbc8</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>5.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish</groupId>
+            <artifactId>javax.json</artifactId>
+            <version>1.1.4</version>
+        </dependency>
     </dependencies>
 
     <repositories>
@@ -113,35 +205,6 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.1</version>
             </plugin>
-<!--            <plugin>
-                <groupId>org.graalvm.nativeimage</groupId>
-                <artifactId>native-image-maven-plugin</artifactId>
-                <version>21.2.0</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>native-image</goal>
-                        </goals>
-                        <phase>verify</phase>
-                    </execution>
-                </executions>
-                <configuration>
-                    <skip>false</skip>
-                    <imageName>mongo2ora-${os.detected.classifier}</imageName>
-                    <mainClass>com.oracle.mongo2ora.Main</mainClass>
-                    <buildArgs>
-                        - -no-fallback
-                        -H:+ReportExceptionStackTraces
-                        - -link-at-build-time
-                        - -report-unsupported-elements-at-runtime
-                        - -enable-all-security-services
-                        -H:EnableURLProtocols=https
-                        -H:ConfigurationFileDirectories=../src/main/resources/META-INF/native-image
-                        -H:-CheckToolchain
-                        - -initialize-at-build-time=sun.instrument.InstrumentationImpl
-                    </buildArgs>
-                </configuration>
-            </plugin> -->
             <plugin>
                 <groupId>org.graalvm.buildtools</groupId>
                 <artifactId>native-maven-plugin</artifactId>
@@ -167,20 +230,31 @@
                     <skip>false</skip>
                     <imageName>mongo2ora-${os.detected.classifier}</imageName>
                     <mainClass>com.oracle.mongo2ora.Main</mainClass>
-                    <quickBuild>true</quickBuild>
+                    <quickBuild>false</quickBuild>
                     <verbose>true</verbose>
                     <fallback>false</fallback>
                     <useArgFile>false</useArgFile>
                     <buildArgs>
                         <buildArg>--no-fallback</buildArg>
                         <buildArg>-H:+ReportExceptionStackTraces</buildArg>
-                        <buildArg>--link-at-build-time</buildArg>
+                        <buildArg>-H:+AddAllCharsets</buildArg>
+                        <buildArg>--gc=serial</buildArg>
+                        <buildArg>-R:MaximumHeapSizePercent=90</buildArg>
+                        <!-- buildArg>-link-at-build-time</buildArg -->
                         <buildArg>--report-unsupported-elements-at-runtime</buildArg>
                         <buildArg>--enable-all-security-services</buildArg>
                         <buildArg>-H:EnableURLProtocols=https</buildArg>
                         <buildArg>-H:ConfigurationFileDirectories=../src/main/resources/META-INF/native-image</buildArg>
                         <buildArg>-H:-CheckToolchain</buildArg>
                         <buildArg>--initialize-at-build-time=sun.instrument.InstrumentationImpl</buildArg>
+                        <!-- buildArg>-initialize-at-run-time=oracle.dms.console.DMSConsole</buildArg -->
+                        <buildArg>--initialize-at-run-time=oracle.xdb.XMLType</buildArg>
+                        <buildArg>--initialize-at-run-time=oracle.ucp.jdbc.oracle.ONSOracleFailoverEventSubscriber</buildArg>
+                        <buildArg>--initialize-at-run-time=oracle.ucp.admin.UniversalConnectionPoolManagerBase</buildArg>
+                        <buildArg>--initialize-at-run-time=oracle.ucp.jdbc.oracle.ONSDatabaseEventHandlerTask</buildArg>
+                        <!-- buildArg>-initialize-at-run-time=oracle.dms.instrument.Level</buildArg -->
+                        <buildArg>--initialize-at-run-time=oracle.net.nt.MQLNTAdapter</buildArg>
+                        <buildArg>--initialize-at-build-time=oracle.net.jdbc.nl.mesg.NLSR</buildArg>
                     </buildArgs>
                 </configuration>
             </plugin>

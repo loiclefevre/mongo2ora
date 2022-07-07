@@ -2,6 +2,12 @@
   "resources":{
   "includes":[
     {
+      "pattern":"\\QMETA-INF/services/java.sql.Driver\\E"
+    }, 
+    {
+      "pattern":"\\Qlog4j.properties\\E"
+    }, 
+    {
       "pattern":"\\Qnet/rubygrapefruit/platform/linux-aarch64-ncurses6/libnative-platform-curses.so\\E"
     }, 
     {
@@ -27,7 +33,46 @@
     }, 
     {
       "pattern":"\\Qnet/rubygrapefruit/platform/windows-amd64/native-platform.dll\\E"
+    }, 
+    {
+      "pattern":"\\Qoracle/jdbc/defaultConnectionProperties.properties\\E"
+    }, 
+    {
+      "pattern":"\\Qoracle/jdbc/driver/errorMap.xml\\E"
+    }, 
+    {
+      "pattern":"\\Qoracle/sql/converter_xcharset/lx20001.glb\\E"
+    }, 
+    {
+      "pattern":"\\Qoracle/sql/converter_xcharset/lx20002.glb\\E"
+    }, 
+    {
+      "pattern":"\\Qoracle/sql/converter_xcharset/lx2001f.glb\\E"
+    }, 
+    {
+      "pattern":"\\Qoracle/sql/converter_xcharset/lx2002e.glb\\E"
+    }, 
+    {
+      "pattern":"\\Qoracle/sql/converter_xcharset/lx200b2.glb\\E"
+    }, 
+    {
+      "pattern":"\\Qorg/slf4j/impl/StaticLoggerBinder.class\\E"
     }
   ]},
-  "bundles":[]
+  "bundles":[
+    {
+      "name":"oracle.jdbc.driver.Messages",
+      "locales":[
+        "", 
+        "und"
+      ]
+    }, 
+    {
+      "name":"oracle.ucp.util.UCPMessages",
+      "locales":[
+        "", 
+        "und"
+      ]
+    }
+  ]
 }
