@@ -27,66 +27,67 @@ public class ASCIICollectionProgressBar {
 
 	public void setProgressionPercentage(double percent) {
 		this.progressionPercentage = percent;
-		progressBackgroundLength = (int)Math.round((percent /100d)*(double)width);
+		progressBackgroundLength = (int) Math.round((percent / 100d) * (double) width);
 	}
 
 	public void write(XYTerminalOutput term) {
-		int spacesBeforeSpeed = dashPosition - docsString.length() -1;
+		int spacesBeforeSpeed = dashPosition - docsString.length() - 1;
 		final String time = timeCompleted == null ? Tools.getDurationSince(startTime) : timeCompleted;
-		final int timeStartingPosition =dashPosition+2;
+		final int timeStartingPosition = dashPosition + 2;
 		final int timeEndingPosition = timeStartingPosition + time.length();
 
 		// 16,170,80
 		// 200,53,48
-		for(int i = 0; i < width; i++) {
-			if(i <= progressBackgroundLength) {
+		for (int i = 0; i < width; i++) {
+			if (i <= progressBackgroundLength) {
 				//term.background(speedColor);
-				term.write(getGradientColor(16,170,80,200,53,48,i,progressionPercentage));
-			} else {
+				term.write(getGradientColor(16, 170, 80, 200, 53, 48, i, progressionPercentage));
+			}
+			else {
 				term.defaultBackground();
 			}
 
-			if(i <= spacesBeforeSpeed) {
+			if (i <= spacesBeforeSpeed) {
 				term.write(" ");
-			} else
-			if(i < dashPosition ) {
+			}
+			else if (i < dashPosition) {
 				//term.bold().bright().foreground(TerminalOutput.Color.White).write("["+speedString+"]");
-				term.bold().bright().foreground(TerminalOutput.Color.White).write(docsString.substring(i-spacesBeforeSpeed-1,i-spacesBeforeSpeed));
-			} else
-			if(i == dashPosition) {
+				term.bold().bright().foreground(TerminalOutput.Color.White).write(docsString.substring(i - spacesBeforeSpeed - 1, i - spacesBeforeSpeed));
+			}
+			else if (i == dashPosition) {
 				term.normal().foreground(TerminalOutput.Color.White).write(" ");
-			}else
-			if(i == dashPosition+1) {
+			}
+			else if (i == dashPosition + 1) {
 				term.bold().bright().foreground(TerminalOutput.Color.White).write("-");
-			}else
-			if(i == dashPosition+2) {
+			}
+			else if (i == dashPosition + 2) {
 				term.normal().foreground(TerminalOutput.Color.White).write(" ");
-			} else
-			if(i <= timeEndingPosition)
-			{
-				term.bold().bright().foreground(TerminalOutput.Color.White).write(time.substring(i-timeStartingPosition-1,i-timeStartingPosition));
-			} else {
+			}
+			else if (i <= timeEndingPosition) {
+				term.bold().bright().foreground(TerminalOutput.Color.White).write(time.substring(i - timeStartingPosition - 1, i - timeStartingPosition));
+			}
+			else {
 				term.write(" ");
 			}
 		}
 	}
 
 	private String getGradientColor(int fr, int fg, int fb, int tr, int tg, int tb, int i, double progressionPercentage) {
-		if(progressionPercentage == 0) return "";
+		if (progressionPercentage == 0) return "";
 
-		if(i == 0) return String.format("\u001b[48;2;%d;%d;%dm",fr,fg,fb);
+		if (i == 0) return String.format("\u001b[48;2;%d;%d;%dm", fr, fg, fb);
 
-		if(i == width) return String.format("\u001b[48;2;%d;%d;%dm",tr,tg,tb);
+		if (i == width) return String.format("\u001b[48;2;%d;%d;%dm", tr, tg, tb);
 
-		final double rInc = (tr - fr) / (double)width;
-		final double gInc = (tg - fg) / (double)width;
-		final double bInc = (tb - fb) / (double)width;
+		final double rInc = (tr - fr) / (double) width;
+		final double gInc = (tg - fg) / (double) width;
+		final double bInc = (tb - fb) / (double) width;
 
-		int rd = (int)(fr+rInc * i);
-		int gd = (int)(fg+gInc * i);
-		int bd = (int)(fb+bInc * i);
+		int rd = (int) (fr + rInc * i);
+		int gd = (int) (fg + gInc * i);
+		int bd = (int) (fb + bInc * i);
 
-		return String.format("\u001b[48;2;%d;%d;%dm",rd,gd,bd);
+		return String.format("\u001b[48;2;%d;%d;%dm", rd, gd, bd);
 	}
 
 	public boolean isFinished() {
@@ -96,18 +97,18 @@ public class ASCIICollectionProgressBar {
 	public void finish() {
 		progressionPercentage = 100d;
 		progressBackgroundLength = width;
-		timeCompleted=Tools.getDurationSince(startTime);
+		timeCompleted = Tools.getDurationSince(startTime);
 		finished = true;
 	}
 
 	public void addJSONDocs(long docNumber) {
 		jsonDocs += docNumber;
-		docsString = String.format("%,d %s",jsonDocs, unit);
-		setProgressionPercentage((double)(100*jsonDocs) / (double)targetJsonDocs);
+		docsString = String.format("%,d %s", jsonDocs, unit);
+		setProgressionPercentage((double) (100 * jsonDocs) / (double) targetJsonDocs);
 	}
 
 	public void addTargetJSONDocs(long docNumber) {
 		targetJsonDocs += docNumber;
-		setProgressionPercentage((double)(100*jsonDocs) / (double)targetJsonDocs);
+		setProgressionPercentage((double) (100 * jsonDocs) / (double) targetJsonDocs);
 	}
 }

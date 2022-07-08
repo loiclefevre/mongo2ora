@@ -1,8 +1,11 @@
 package com.oracle.mongo2ora.asciigui;
 
+import com.mongodb.client.MongoCollection;
+import com.oracle.mongo2ora.migration.CollectionIndexesInfo;
 import com.oracle.mongo2ora.util.XYTerminalOutput;
 import net.rubygrapefruit.platform.terminal.TerminalOutput;
 import oracle.ucp.jdbc.PoolDataSource;
+import org.bson.Document;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -41,6 +44,7 @@ public class ASCIIGUI extends TimerTask {
 	private List<String> collections = new ArrayList<>();
 	private List<ASCIICollectionProgressBar> collectionsProgressBars = new ArrayList<>();
 	private ASCIICollectionProgressBar currentCollectionProgressBar;
+	private List<CollectionIndexesInfo> collectionsIndexes = new ArrayList<>();
 
 	public ASCIIGUI(XYTerminalOutput term, String title) {
 		this.term = term;
@@ -296,7 +300,7 @@ public class ASCIIGUI extends TimerTask {
 		currentCollectionProgressBar.addJSONDocs(docNumber);
 	}
 
-	public synchronized void addNewDestinationDatabaseCollection(String newCollectionName) {
+	public synchronized void addNewDestinationDatabaseCollection(String newCollectionName, MongoCollection<Document> mongoCollection) {
 		if (numberOfOracleCollections == -1) {
 			numberOfOracleCollections = 1;
 		}
@@ -307,6 +311,7 @@ public class ASCIIGUI extends TimerTask {
 		finishLastCollection();
 		collections.add(0, newCollectionName);
 		collectionsProgressBars.add(0, currentCollectionProgressBar = new ASCIICollectionProgressBar(50, System.currentTimeMillis()));
+		collectionsIndexes.add(0,new CollectionIndexesInfo(mongoCollection));
 	}
 
 	public synchronized void finishLastCollection() {

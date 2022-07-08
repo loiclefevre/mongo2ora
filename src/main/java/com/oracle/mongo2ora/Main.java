@@ -219,7 +219,7 @@ public class Main {
 
 //        System.out.println("Worker threads: "+(conf.useRSI ? 2* conf.cores/3 : conf.cores));
 		//System.out.println("Worker threads: 8");
-		workerThreadPool = Executors.newFixedThreadPool(8 /*conf.useRSI ? 2* conf.cores/3 : conf.cores*/,
+		workerThreadPool = Executors.newFixedThreadPool(conf.cores /*conf.useRSI ? 2* conf.cores/3 : conf.cores*/,
 				new ThreadFactory() {
 					private final AtomicInteger threadNumber = new AtomicInteger(0);
 					private final ThreadGroup group = new ThreadGroup("MongoDBMigration");
@@ -309,7 +309,7 @@ public class Main {
 					continue;
 				}
 
-				gui.addNewDestinationDatabaseCollection(collectionName);
+				gui.addNewDestinationDatabaseCollection(collectionName,mongoCollection);
 
 				// retrieve average document size
 				final Iterable<Document> statsIterator = mongoCollection.aggregate(Arrays.asList(
