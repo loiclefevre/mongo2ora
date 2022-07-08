@@ -243,8 +243,9 @@
                         <buildArg>-R:MaximumHeapSizePercent=95</buildArg>
                         <!-- G1 GC -->
                         <!-- buildArg>- -gc=G1</buildArg>
-                        <buildArg>-XX:MaxRAMPercentage=95</buildArg>
-                        <buildArg>-XX:+UnlockExperimentalVMOptions</buildArg>
+                        <buildArg>-R:MaxRAMPercentage=95.0</buildArg -->
+
+                        <!-- buildArg>-XX:+UnlockExperimentalVMOptions</buildArg>
                         <buildArg>-XX:G1MaxNewSizePercent=80</buildArg -->
 
 
