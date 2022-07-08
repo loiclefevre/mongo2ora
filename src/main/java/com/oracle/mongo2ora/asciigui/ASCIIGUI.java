@@ -76,7 +76,7 @@ public class ASCIIGUI extends TimerTask {
 		term.newline();
 
 		// Oracle information line 2
-		term.reset().write(WINDOWS ? "\u00c8\u00cd> " : "\u255a\u2550\u21d2 ").bold().write(BrightRed).write(destinationDatabaseName).reset().write(" DB");
+		term.reset().write(WINDOWS ? "\u00c8\u00cd> " : "\u255a\u2550> ").bold().write(BrightRed).write(destinationDatabaseName).reset().write(" DB");
 
 		if (numberOfOracleCollections != -1) {
 			term.write(": ");

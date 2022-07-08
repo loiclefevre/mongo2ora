@@ -238,8 +238,16 @@
                         <buildArg>--no-fallback</buildArg>
                         <buildArg>-H:+ReportExceptionStackTraces</buildArg>
                         <buildArg>-H:+AddAllCharsets</buildArg>
+                        <!-- Serial GC -->
                         <buildArg>--gc=serial</buildArg>
-                        <buildArg>-R:MaximumHeapSizePercent=90</buildArg>
+                        <buildArg>-R:MaximumHeapSizePercent=95</buildArg>
+                        <!-- G1 GC -->
+                        <!-- buildArg>- -gc=G1</buildArg>
+                        <buildArg>-XX:MaxRAMPercentage=95</buildArg>
+                        <buildArg>-XX:+UnlockExperimentalVMOptions</buildArg>
+                        <buildArg>-XX:G1MaxNewSizePercent=80</buildArg -->
+
+
                         <!-- buildArg>-link-at-build-time</buildArg -->
                         <buildArg>--report-unsupported-elements-at-runtime</buildArg>
                         <buildArg>--enable-all-security-services</buildArg>
