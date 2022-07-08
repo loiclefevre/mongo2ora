@@ -601,12 +601,10 @@ public class Main {
 //                                p.setString(1, doc.get("_id").toString());
 //                                p.setBytes(2, out.toByteArray());
 								byte[] osonData;
-								osonData = decoder.getOSONData();
-
-								//p.setBytes(3, osonData);
+								p.setBytes(3, osonData = decoder.getOSONData());
 //								p.setObject(3,osonData = decoder.getOSONData(), OracleTypes.JSON);
-								p.setString(3, doc.toJson());
-								osonData = doc.toJson().getBytes(StandardCharsets.UTF_8);
+//								p.setString(3, doc.toJson());
+//								osonData = doc.toJson().getBytes(StandardCharsets.UTF_8);
 
 
 								p.setString(1, decoder.getOid());
