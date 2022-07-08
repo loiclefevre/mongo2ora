@@ -64,13 +64,13 @@ public class ASCIIGUI extends TimerTask {
 			term.bold().bright().write(String.format("%,d", numberOfMongoDBJSONDocuments)).reset().write(" JSON docs, ");
 			term.bold().bright().write(String.format("%,d", numberOfMongoDBIndexes)).reset().write(" index(es), ");
 			if (totalMongoDBSize / (1024d * 1024d * 1024d) > 1024d) {
-				term.bold().bright().write(String.format("%.1f", totalMongoDBSize / (1024d * 1024d * 1024d * 1024d))).reset().write(" TB");
+				term.bold().bright().write(String.format("%.1f", totalMongoDBSize / (1024d * 1024d * 1024d * 1024d))).reset().write(" TB").clearToEndOfLine();
 			}
 			else if (totalMongoDBSize / (1024d * 1024d) > 1024d) {
-				term.bold().bright().write(String.format("%.1f", totalMongoDBSize / (1024d * 1024d * 1024d))).reset().write(" GB");
+				term.bold().bright().write(String.format("%.1f", totalMongoDBSize / (1024d * 1024d * 1024d))).reset().write(" GB").clearToEndOfLine();
 			}
 			else {
-				term.bold().bright().write(String.format("%.1f", totalMongoDBSize / (1024d * 1024d))).reset().write(" MB");
+				term.bold().bright().write(String.format("%.1f", totalMongoDBSize / (1024d * 1024d))).reset().write(" MB").clearToEndOfLine();
 			}
 		}
 		term.newline();
@@ -84,13 +84,13 @@ public class ASCIIGUI extends TimerTask {
 			term.bold().bright().write(String.format("%,d", numberOfOracleJSONDocuments)).reset().write(" JSON docs, ");
 			term.bold().bright().write(String.format("%,d", numberOfOracleIndexes)).reset().write(" index(es), ");
 			if (totalOracleSize / (1024d * 1024d * 1024d) > 1024d) {
-				term.bold().bright().write(String.format("%.1f", totalOracleSize / (1024d * 1024d * 1024d * 1024d))).reset().write(" TB");
+				term.bold().bright().write(String.format("%.1f", totalOracleSize / (1024d * 1024d * 1024d * 1024d))).reset().write(" TB").clearToEndOfLine();
 			}
 			else if (totalOracleSize / (1024d * 1024d) > 1024d) {
-				term.bold().bright().write(String.format("%.1f", totalOracleSize / (1024d * 1024d * 1024d))).reset().write(" TB");
+				term.bold().bright().write(String.format("%.1f", totalOracleSize / (1024d * 1024d * 1024d))).reset().write(" GB").clearToEndOfLine();
 			}
 			else {
-				term.bold().bright().write(String.format("%.1f", totalOracleSize / (1024d * 1024d))).reset().write(" MB");
+				term.bold().bright().write(String.format("%.1f", totalOracleSize / (1024d * 1024d))).reset().write(" MB").clearToEndOfLine();
 			}
 		}
 		term.newline();

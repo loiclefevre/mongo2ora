@@ -557,7 +557,7 @@ public class Main {
 								oracle.jdbc.internal.OracleConnection.CommitOption.WRITEBATCH,
 								oracle.jdbc.internal.OracleConnection.CommitOption.NOWAIT);
 
-						Properties directPathLoadProperties = new Properties();
+						final Properties directPathLoadProperties = new Properties();
 
 
 						directPathLoadProperties.put("DPPDEF_IN_NOLOG", "true");
@@ -568,8 +568,8 @@ public class Main {
 						directPathLoadProperties.put("DPPDEF_IN_STORAGE_NEXT", String.valueOf(8 * 1024 * 1024));
 
 
-						//try (PreparedStatement p = ((OracleConnection) c).prepareDirectPath(pds.getUser().toUpperCase(), collectionName, new String[]{"ID", "VERSION", "JSON_DOCUMENT"},/* String.format("p%d", partitionId),*/ directPathLoadProperties)) {
-						try (PreparedStatement p = c.prepareStatement("insert /*+ append */ into " + collectionName + " (ID, VERSION, JSON_DOCUMENT) values (?,?,?)")) {
+						try (PreparedStatement p = ((OracleConnection) c).prepareDirectPath(pds.getUser().toUpperCase(), collectionName, new String[]{"ID", "VERSION", "JSON_DOCUMENT"},/* String.format("p%d", partitionId),*/ directPathLoadProperties)) {
+						//try (PreparedStatement p = c.prepareStatement("insert /*+ append */ into " + collectionName + " (ID, VERSION, JSON_DOCUMENT) values (?,?,?)")) {
                             /*final CharacterSet cs = CharacterSet.make(CharacterSet.AL32UTF8_CHARSET);
                             final CHAR version = new CHAR("1", cs);
 
