@@ -1,5 +1,6 @@
 package com.oracle.mongo2ora.migration.oracle;
 
+import com.mongodb.client.ListIndexesIterable;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
@@ -227,91 +228,100 @@ public class OracleCollectionInfo {
 				gui.endIndex("primary key");
 
 				// manage other MongoDB indexes
-				final Properties props = new Properties();
-				props.put("oracle.soda.sharedMetadataCache", "true");
-				props.put("oracle.soda.localMetadataCache", "true");
-
-				final OracleRDBMSClient cl = new OracleRDBMSClient(props);
-				final OracleDatabase db = cl.getDatabase(c);
-				final OracleCollection sodaCollection = db.openCollection(collectionName);
-
-				final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
-
-				try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( json_document, dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + ")\n" +
-						"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
-					while (r.next()) {
-						String key = r.getString(1);
-						if(!r.wasNull()) {
-							fieldsInfo.put(key, new FieldInfo(key, r.getString(2), r.getInt(3)));
-						}
-					}
+				int mongoDBIndex = 0;
+				for(Document indexMetadata : mongoCollection.listIndexes()) {
+					mongoDBIndex++;
 				}
 
-				boolean needSearchIndex = false;
+				if(mongoDBIndex > 0) {
+					final Properties props = new Properties();
+					props.put("oracle.soda.sharedMetadataCache", "true");
+					props.put("oracle.soda.localMetadataCache", "true");
 
-				for (Document indexMetadata : mongoCollection.listIndexes()) {
-					//System.out.println(indexMetadata);
-					if (indexMetadata.getString("name").contains("$**") || "text".equals(indexMetadata.getEmbedded(Arrays.asList("key"), Document.class).getString("_fts"))) {
-						needSearchIndex = true; //System.out.println("Need Search Index");
-					} else if (indexMetadata.getString("name").equals("_id_")) {
-						// skipping primary key as it already exists!
-						continue;
-					} else {
-						final Document keys = indexMetadata.getEmbedded(Arrays.asList("key"), Document.class);
-						boolean spatial = false;
-						String spatialColumn = "";
-						for (String key : keys.keySet()) {
-							final Object value = keys.get(key);
-							if (value instanceof Integer) continue;
-							if (value instanceof String) {
-								if ("2dsphere".equals((String) value)) {
-									spatialColumn = key;
-									spatial = true;
-									break;
+					final OracleRDBMSClient cl = new OracleRDBMSClient(props);
+					final OracleDatabase db = cl.getDatabase(c);
+					final OracleCollection sodaCollection = db.openCollection(collectionName);
+
+					final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
+
+					try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( json_document, dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + " where rownum <= 1000)\n" +
+							"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
+						while (r.next()) {
+							String key = r.getString(1);
+							if (!r.wasNull()) {
+								fieldsInfo.put(key, new FieldInfo(key, r.getString(2), r.getInt(3)));
+							}
+						}
+					}
+
+					boolean needSearchIndex = false;
+
+					for (Document indexMetadata : mongoCollection.listIndexes()) {
+						//System.out.println(indexMetadata);
+						if (indexMetadata.getString("name").contains("$**") || "text".equals(indexMetadata.getEmbedded(Arrays.asList("key"), Document.class).getString("_fts"))) {
+							needSearchIndex = true; //System.out.println("Need Search Index");
+						}
+						else if (indexMetadata.getString("name").equals("_id_")) {
+							// skipping primary key as it already exists now!
+							continue;
+						}
+						else {
+							final Document keys = indexMetadata.getEmbedded(Arrays.asList("key"), Document.class);
+							boolean spatial = false;
+							String spatialColumn = "";
+							for (String key : keys.keySet()) {
+								final Object value = keys.get(key);
+								if (value instanceof Integer) continue;
+								if (value instanceof String) {
+									if ("2dsphere".equals(value)) {
+										spatialColumn = key;
+										spatial = true;
+										break;
+									}
 								}
 							}
-						}
 
-						if (spatial) {
+							if (spatial) {
 //							System.out.println("Spatial index");
-							final MongoCursor<Document> cursor = mongoCollection.find(new Document(spatialColumn + ".type", "Point")).projection(new Document(spatialColumn + ".type", 1)).batchSize(100).limit(100).cursor();
+								final MongoCursor<Document> cursor = mongoCollection.find(new Document(spatialColumn + ".type", "Point")).projection(new Document(spatialColumn + ".type", 1)).batchSize(100).limit(100).cursor();
 
-							boolean allDocsHavePoints = false;
+								boolean allDocsHavePoints = false;
 
-							int numberOfDocsWithPoint = 0;
-							while (cursor.hasNext()) {
-								cursor.next();
-								numberOfDocsWithPoint++;
-							}
+								int numberOfDocsWithPoint = 0;
+								while (cursor.hasNext()) {
+									cursor.next();
+									numberOfDocsWithPoint++;
+								}
 
-							allDocsHavePoints = numberOfDocsWithPoint == 100;
+								allDocsHavePoints = numberOfDocsWithPoint == 100;
 
-							final String SQLStatement = String.format(
-									"create index %s on %s " +
-											"(JSON_VALUE(JSON_DOCUMENT, '$.%s' returning SDO_GEOMETRY ERROR ON ERROR NULL ON EMPTY)) " +
-											"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getString("name"), collectionName, spatialColumn);
+								final String SQLStatement = String.format(
+										"create index %s on %s " +
+												"(JSON_VALUE(JSON_DOCUMENT, '$.%s' returning SDO_GEOMETRY ERROR ON ERROR NULL ON EMPTY)) " +
+												"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getString("name"), collectionName, spatialColumn);
 
-							//System.out.println(SQLStatement);
-							start = System.currentTimeMillis();
-							gui.startIndex(indexMetadata.getString("name"));
-							s.execute(SQLStatement);
+								//System.out.println(SQLStatement);
+								start = System.currentTimeMillis();
+								gui.startIndex(indexMetadata.getString("name"));
+								s.execute(SQLStatement);
 //							System.out.println("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
-							gui.endIndex(indexMetadata.getString("name"));
-						} else {
+								gui.endIndex(indexMetadata.getString("name"));
+							}
+							else {
 //							System.out.println("Normal index");
-							final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getString("name"), getCreateIndexColumns(collectionName, keys, fieldsInfo), indexMetadata.getBoolean("unique"));
+								final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getString("name"), getCreateIndexColumns(collectionName, keys, fieldsInfo), indexMetadata.getBoolean("unique"));
 
 //							System.out.println(indexSpec);
-							start = System.currentTimeMillis();
-							gui.startIndex(indexMetadata.getString("name"));
-							sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
+								//start = System.currentTimeMillis();
+								gui.startIndex(indexMetadata.getString("name"));
+								sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
 //							System.out.println("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
-							gui.endIndex(indexMetadata.getString("name"));
+								gui.endIndex(indexMetadata.getString("name"));
+							}
 						}
 					}
-				}
 
-				if (needSearchIndex) {
+					if (needSearchIndex) {
                     /*try (CallableStatement cs = c.prepareCall("{CALL CTX_DDL.SYNC_INDEX(idx_name => ?, memory => '512M', parallel_degree => ?, locking => CTX_DDL.LOCK_NOWAIT)}")) {
                         cs.setString(1, collectionName + "$search_index");
                         cs.setInt(2, maxParallelDegree);
@@ -320,16 +330,16 @@ public class OracleCollectionInfo {
                         System.out.println("Manual sync of Search Index done in " + getDurationSince(start));
                     }*/
 
-					start = System.currentTimeMillis();
-					gui.startIndex("search_index");
-					s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (json_document) FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
+						//start = System.currentTimeMillis();
+						gui.startIndex("search_index");
+						s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (json_document) FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
 //					System.out.println("Created Search Index (every 1s sync) in " + getDurationSince(start));
-					gui.endIndex("search_index");
-				}
+						gui.endIndex("search_index");
+					}
 
-				s.execute("ALTER SESSION DISABLE PARALLEL DDL");
+					s.execute("ALTER SESSION DISABLE PARALLEL DDL");
 //				System.out.println("OK");
-
+				}
 			}
 		}
 	}

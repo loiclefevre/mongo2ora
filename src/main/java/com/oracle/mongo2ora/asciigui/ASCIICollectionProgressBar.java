@@ -123,6 +123,7 @@ public class ASCIICollectionProgressBar {
 		this.indexing = true;
 		unit = "";
 		indexes++;
-		docsString = String.format("%s (%d/%d)", indexName, indexes, totalCollectionIndexes);
+		final String nbIndexesDone= String.format(" (%d/%d)",indexes, totalCollectionIndexes);
+		docsString = String.format("%s%s", ASCIIGUI.forceRightAlignedLength(indexName,25-nbIndexesDone.length()),nbIndexesDone);
 	}
 }

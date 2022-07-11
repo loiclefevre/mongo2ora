@@ -146,7 +146,7 @@ public class ASCIIGUI extends TimerTask {
 		}
 	}
 
-	private String forceRightAlignedLength(String s, int size) {
+	public static String forceRightAlignedLength(String s, int size) {
 		if (s.length() > size) {
 			return s.substring(0, size);
 		}
@@ -168,7 +168,7 @@ public class ASCIIGUI extends TimerTask {
 		return r.toString();
 	}
 
-	private String leadingSpaces(String s, int expectedLength) {
+	private static String leadingSpaces(String s, int expectedLength) {
 		final StringBuilder r = new StringBuilder();
 
 		while (r.length() + s.length() < expectedLength) {
@@ -228,20 +228,7 @@ public class ASCIIGUI extends TimerTask {
 								speed = 0;
 							}
 
-							if ("0.0".equals(String.format("%.1f", (bytesReceivedFromClientRealInMBPerSec/(1024f*1024f))))) {
-								speedColor = TerminalOutput.Color.White;
-							}
-							else if (speed < (128 / 4f * 0.8f)) {
-								speedColor = TerminalOutput.Color.Green;
-							}
-							else if (speed < (128 / 4f * 0.9f)) {
-								speedColor = TerminalOutput.Color.Yellow;
-							}
-							else {
-								speedColor = TerminalOutput.Color.Red;
-							}
-
-							mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec);
+							speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec);
 						}
 					}
 				}

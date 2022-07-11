@@ -24,7 +24,7 @@ public class ASCIIProgressBar {
 		this.startTime = startTime;
 	}
 
-	public void setSpeed(double speedInMBPerSec) {
+	public TerminalOutput.Color setSpeed(double speedInMBPerSec) {
 		this.speed = speedInMBPerSec;
 		if(speed <= 1024d) {
 			unit = "MB/s";
@@ -34,15 +34,22 @@ public class ASCIIProgressBar {
 		}
 		speedString = String.format("%.1f %s",speed, unit);
 
-		if (speed < (128 / 4f * 0.8f)) {
+		//System.out.println(speedInMBPerSec+", "+speedString);
+
+		if ("0.0".equals(String.format("%.1f", speed))) {
+			speedColor = TerminalOutput.Color.White;
+		}
+		else if (speedInMBPerSec < 512) {
 			speedColor = TerminalOutput.Color.Green;
 		}
-		else if (speed < (128 / 4f * 0.9f)) {
+		else if (speedInMBPerSec < 1024) {
 			speedColor = TerminalOutput.Color.Yellow;
 		}
 		else {
 			speedColor = TerminalOutput.Color.Red;
 		}
+
+		return speedColor;
 	}
 
 	public void setProgressionPercentage(double percent) {
