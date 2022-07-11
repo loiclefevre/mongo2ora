@@ -51,6 +51,8 @@ public class ASCIIGUI extends TimerTask {
 	private List<CollectionIndexesInfo> collectionsIndexes = new ArrayList<>();
 	private int destinationDatabaseInstances = 1;
 
+	private boolean speedBold;
+
 	public ASCIIGUI(XYTerminalOutput term, String title) {
 		this.term = term;
 		this.title = title;
@@ -66,7 +68,15 @@ public class ASCIIGUI extends TimerTask {
 		term.write(title).newline();
 
 		// MongoDB information line 1
-		term.reset().foreground(speedColor).write(WINDOWS ? "\u00c9 " : "\u2554 ").bold().write(XYTerminalOutput.BrightGreen).write(sourceDatabase).reset().write(" DB");
+		term.reset().foreground(speedColor);
+		speedBold = !speedBold;
+		if(speedBold) {
+			if(speedColor != TerminalOutput.Color.White)
+			term.bold();
+		} else {
+			term.normal();
+		}
+		term.write(WINDOWS ? "\u00c9 " : "\u2554 ").bold().write(XYTerminalOutput.BrightGreen).write(sourceDatabase).reset().write(" DB");
 
 		if (numberOfMongoDBCollections != -1) {
 			term.write(": ");
@@ -81,7 +91,14 @@ public class ASCIIGUI extends TimerTask {
 		term.newline();
 
 		// Oracle information line 2
-		term.reset().foreground(speedColor).write(WINDOWS ? "\u00c8\u00cd> " : "\u255a\u2550> ").bold().write(BrightRed).write(destinationDatabaseName).reset().write(" DB");
+		term.reset().foreground(speedColor);
+		if(speedBold) {
+			if(speedColor != TerminalOutput.Color.White)
+			term.bold();
+		} else {
+			term.normal();
+		}
+		term.write(WINDOWS ? "\u00c8\u00cd> " : "\u255a\u2550> ").bold().write(BrightRed).write(destinationDatabaseName).reset().write(" DB");
 
 		if (numberOfOracleCollections != -1) {
 			if (destinationDatabaseInstances > 1) {
