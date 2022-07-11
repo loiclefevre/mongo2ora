@@ -57,7 +57,7 @@ import static java.util.stream.Collectors.toList;
  * TODO:
  * - summary at the end
  * OK display index creation
- * - work on Autonomous database detection and adapt with OSON support
+ * OK work on Autonomous database detection and adapt with OSON support
  * - work on Autonomous database detection and adapt with JSON datatype native support
  * - help migration using properties file for per collection configuration (range partitioning, SODA collection columns, types etc..., filtering...)
  */

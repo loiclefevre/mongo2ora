@@ -149,6 +149,11 @@ public class ASCIIGUI extends TimerTask {
 			}
 
 			term.newline();
+
+			if(i == 5) {
+				term.reset().write(String.format("along %d collection%s already copied before.", collectionsProgressBars.size()-5, collectionsProgressBars.size()-5 > 1 ? "s":"")).clearToEndOfLine();
+				break;
+			}
 		}
 	}
 
