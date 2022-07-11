@@ -212,8 +212,10 @@ public class Configuration {
 				.write("Options:").newline()
 				.write("-p <number>: parallel threads to use (default number of vCPUs)").newline()
 				.write("-b <batch size>: size of batch (default: 4096)").newline()
-				.write("-a [description]: generate AWR report for Oracle database with optional description (requires Diagnostic Pack for on-premises)").newline()
-				.write("-c <comma-separated list of collection name(s)>: migrate only the selected collection(s)").newline();
+				//.write("-a [description]: generate AWR report for Oracle database with optional description (requires Diagnostic Pack for on-premises)").newline()
+				.write("-c <comma-separated list of collection name(s)>: migrate only the selected collection(s)").newline()
+				.write("--drop: drop existing collection(s) from the destination database").newline()
+		;
 
 		System.exit(1);
 	}
