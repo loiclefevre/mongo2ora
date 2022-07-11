@@ -10,6 +10,7 @@ import com.mongodb.client.MongoDatabase;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.Configuration;
 import com.oracle.mongo2ora.migration.ConversionInformation;
+import com.oracle.mongo2ora.migration.converter.BSON2TextCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.DirectPathBSON2OSONCollectionConverter;
 import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
 import com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer;
@@ -55,7 +56,7 @@ import static java.util.stream.Collectors.toList;
 /**
  * TODO:
  * - summary at the end
- * - display index creation
+ * OK display index creation
  * - work on Autonomous database detection and adapt with OSON support
  * - work on Autonomous database detection and adapt with JSON datatype native support
  * - help migration using properties file for per collection configuration (range partitioning, SODA collection columns, types etc..., filtering...)
@@ -76,6 +77,9 @@ public class Main {
 	static int MONGODB_INDEXES = 0;
 
 	public static ASCIIGUI gui;
+
+	public static boolean AUTONOMOUS_DATABASE = false;
+	public static String AUTONOMOUS_DATABASE_TYPE="";
 
 	public static void main(final String[] args) {
 		// For Autonomous Database CMAN load balancing
@@ -189,6 +193,22 @@ public class Main {
 							pos = oracleVersion.indexOf('.', pos + 1);
 							gui.setDestinationDatabaseVersion(oracleVersion.substring(0, pos));
 							gui.setDestinationDatabaseInstances(r.getInt(2));
+						}
+					}
+
+					try (ResultSet r=s.executeQuery("select p.name, t.region, t.base_size, t.service, t.infrastructure from v$pdbs p, JSON_TABLE(p.cloud_identity, '$' COLUMNS (region path '$.REGION', base_size number path '$.BASE_SIZE', service path '$.SERVICE', infrastructure path '$.INFRASTRUCTURE')) t")) {
+						if(r.next()) {
+							AUTONOMOUS_DATABASE = true;
+							AUTONOMOUS_DATABASE_TYPE = r.getString(4);
+							if("Shared".equalsIgnoreCase(r.getString(5))) {
+								AUTONOMOUS_DATABASE_TYPE += "-S";
+							} else {
+								AUTONOMOUS_DATABASE_TYPE += "-D";
+							}
+							gui.setDestinationDatabaseType(AUTONOMOUS_DATABASE_TYPE);
+							//setDBName(r.getString(1));
+							//setRegion(r.getString(2));
+							//setBaseSize(r.getLong(3)/1024d/1024d/1024d);
 						}
 					}
 				}
@@ -313,7 +333,8 @@ public class Main {
 
 						final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
 						publishingCfsConvert.add(pCf);
-						workerThreadPool.execute(new DirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
+						workerThreadPool.execute( AUTONOMOUS_DATABASE ? new DirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize) :
+								new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize) );
 
 						i++;
 					}

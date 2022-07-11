@@ -52,6 +52,7 @@ public class ASCIIGUI extends TimerTask {
 	private int destinationDatabaseInstances = 1;
 
 	private boolean speedBold;
+	private String databaseType = "Oracle";
 
 	public ASCIIGUI(XYTerminalOutput term, String title) {
 		this.term = term;
@@ -118,7 +119,7 @@ public class ASCIIGUI extends TimerTask {
 		// Global migration stats line 3
 		term.reset().bold().write(XYTerminalOutput.BrightGreen).write("MongoDB").reset().write(" ").write(trailingSpaces(mongoDBVersion, 6)).write(" |");
 		mainProgressBar.write(term);
-		term.reset().write("| ").bold().write(BrightRed).write("Oracle").reset().write(" ").write(oracleVersion).newline();
+		term.reset().write("| ").bold().write(BrightRed).write(databaseType).reset().write(" ").write(oracleVersion).newline();
 
 		// Now per collection stats line
 		for (int i = 0; i < collectionsProgressBars.size(); i++) {
@@ -375,5 +376,9 @@ public class ASCIIGUI extends TimerTask {
 	public void endIndex(String indexName) {
 		addNewDestinationDatabaseIndex();
 		collectionsIndexes.get(0).endIndex();
+	}
+
+	public void setDestinationDatabaseType(String databaseType) {
+		this.databaseType = databaseType;
 	}
 }
