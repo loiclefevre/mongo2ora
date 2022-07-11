@@ -163,7 +163,7 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 			}
 		}
 		catch (SQLException sqle) {
-			sqle.printStackTrace();
+			//sqle.printStackTrace();
 			publishingCf.complete(new ConversionInformation(sqle));
 		}
 		finally {
