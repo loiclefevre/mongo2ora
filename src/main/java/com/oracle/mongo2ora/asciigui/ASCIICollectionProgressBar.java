@@ -17,6 +17,8 @@ public class ASCIICollectionProgressBar {
 	private int progressBackgroundLength;
 	private int dashPosition;
 	private boolean finished;
+	private boolean indexing;
+	private int indexes;
 	private String timeCompleted;
 
 	public ASCIICollectionProgressBar(int width, long startTime) {
@@ -75,6 +77,8 @@ public class ASCIICollectionProgressBar {
 	private String getGradientColor(int fr, int fg, int fb, int tr, int tg, int tb, int i, double progressionPercentage) {
 		if (progressionPercentage == 0) return "";
 
+		//if (progressionPercentage >= 100) return String.format("\u001b[48;2;%d;%d;%dm", tr, tg, tb);
+
 		if (i == 0) return String.format("\u001b[48;2;%d;%d;%dm", fr, fg, fb);
 
 		if (i == width) return String.format("\u001b[48;2;%d;%d;%dm", tr, tg, tb);
@@ -98,17 +102,27 @@ public class ASCIICollectionProgressBar {
 		progressionPercentage = 100d;
 		progressBackgroundLength = width;
 		timeCompleted = Tools.getDurationSince(startTime);
+		indexing = false;
+		unit = "JSON docs";
+		docsString = String.format("%,d %s", jsonDocs, unit);
 		finished = true;
 	}
 
-	public void addJSONDocs(long docNumber) {
+	public synchronized void addJSONDocs(long docNumber) {
 		jsonDocs += docNumber;
 		docsString = String.format("%,d %s", jsonDocs, unit);
 		setProgressionPercentage((double) (100 * jsonDocs) / (double) targetJsonDocs);
 	}
 
-	public void addTargetJSONDocs(long docNumber) {
+	public synchronized void addTargetJSONDocs(long docNumber) {
 		targetJsonDocs += docNumber;
 		setProgressionPercentage((double) (100 * jsonDocs) / (double) targetJsonDocs);
+	}
+
+	public void addIndex(String indexName, int totalCollectionIndexes) {
+		this.indexing = true;
+		unit = "";
+		indexes++;
+		docsString = String.format("%s (%d/%d)", indexName, indexes, totalCollectionIndexes);
 	}
 }

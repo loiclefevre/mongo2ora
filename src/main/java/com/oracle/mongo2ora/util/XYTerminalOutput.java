@@ -5,6 +5,7 @@ import net.rubygrapefruit.platform.terminal.TerminalOutput;
 import net.rubygrapefruit.platform.terminal.TerminalSize;
 
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,6 +36,7 @@ public class XYTerminalOutput {
 		if (osName.startsWith("windows")) {
 			WINDOWS = true;
 		}
+		System.setOut(new PrintStream(this.getOutputStream(), true));
 	}
 
 	public OutputStream getOutputStream() {

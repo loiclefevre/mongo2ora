@@ -21,8 +21,10 @@ import static com.oracle.mongo2ora.util.XYTerminalOutput.BrightRed;
 public class ASCIIGUI extends TimerTask {
 	private final String title;
 	private String sourceDatabase;
+	private boolean sourceDatabaseConnected;
 	private String mongoDBVersion = "";
 	private String destinationDatabaseName;
+	private boolean destinationDatabaseConnected;
 	private String oracleVersion = "";
 	private final boolean WINDOWS;
 	private long numberOfMongoDBCollections = -1;
@@ -41,10 +43,13 @@ public class ASCIIGUI extends TimerTask {
 	private final Timer timer;
 	private PoolDataSource pds;
 
+	private TerminalOutput.Color speedColor = TerminalOutput.Color.White;
+
 	private List<String> collections = new ArrayList<>();
 	private List<ASCIICollectionProgressBar> collectionsProgressBars = new ArrayList<>();
 	private ASCIICollectionProgressBar currentCollectionProgressBar;
 	private List<CollectionIndexesInfo> collectionsIndexes = new ArrayList<>();
+	private int destinationDatabaseInstances = 1;
 
 	public ASCIIGUI(XYTerminalOutput term, String title) {
 		this.term = term;
@@ -59,43 +64,37 @@ public class ASCIIGUI extends TimerTask {
 
 		// Main Title line 0
 		term.write(title).newline();
+
 		// MongoDB information line 1
-		term.reset().write(WINDOWS ? "\u00c9 " : "\u2554 ").bold().write(XYTerminalOutput.BrightGreen).write(sourceDatabase).reset().write(" DB");
+		term.reset().foreground(speedColor).write(WINDOWS ? "\u00c9 " : "\u2554 ").bold().write(XYTerminalOutput.BrightGreen).write(sourceDatabase).reset().write(" DB");
 
 		if (numberOfMongoDBCollections != -1) {
 			term.write(": ");
-			term.bold().bright().write(String.format("%,d", numberOfMongoDBCollections)).reset().write(" collection(s), ");
-			term.bold().bright().write(String.format("%,d", numberOfMongoDBJSONDocuments)).reset().write(" JSON docs, ");
-			term.bold().bright().write(String.format("%,d", numberOfMongoDBIndexes)).reset().write(" index(es), ");
-			if (totalMongoDBSize / (1024d * 1024d * 1024d) > 1024d) {
-				term.bold().bright().write(String.format("%.1f", totalMongoDBSize / (1024d * 1024d * 1024d * 1024d))).reset().write(" TB").clearToEndOfLine();
-			}
-			else if (totalMongoDBSize / (1024d * 1024d) > 1024d) {
-				term.bold().bright().write(String.format("%.1f", totalMongoDBSize / (1024d * 1024d * 1024d))).reset().write(" GB").clearToEndOfLine();
-			}
-			else {
-				term.bold().bright().write(String.format("%.1f", totalMongoDBSize / (1024d * 1024d))).reset().write(" MB").clearToEndOfLine();
-			}
+			term.bold().bright().write(String.format("%,d", numberOfMongoDBCollections)).reset().write(String.format(" collection%s, ", numberOfMongoDBCollections > 1 ? "s" : ""));
+			term.bold().bright().write(String.format("%,d", numberOfMongoDBJSONDocuments)).reset().write(String.format(" JSON doc%s, ", numberOfMongoDBJSONDocuments > 1 ? "s" : ""));
+			term.bold().bright().write(String.format("%,d", numberOfMongoDBIndexes)).reset().write(String.format(" index, ", numberOfMongoDBIndexes > 1 ? "es" : ""));
+			writeSize(term, totalMongoDBSize);
+		}
+		else {
+			term.write(" connecting...");
 		}
 		term.newline();
 
 		// Oracle information line 2
-		term.reset().write(WINDOWS ? "\u00c8\u00cd> " : "\u255a\u2550> ").bold().write(BrightRed).write(destinationDatabaseName).reset().write(" DB");
+		term.reset().foreground(speedColor).write(WINDOWS ? "\u00c8\u00cd> " : "\u255a\u2550> ").bold().write(BrightRed).write(destinationDatabaseName).reset().write(" DB");
 
 		if (numberOfOracleCollections != -1) {
+			if (destinationDatabaseInstances > 1) {
+				term.write(String.format("(%d)", destinationDatabaseInstances));
+			}
 			term.write(": ");
-			term.bold().bright().write(String.format("%,d", numberOfOracleCollections)).reset().write(" collection(s), ");
-			term.bold().bright().write(String.format("%,d", numberOfOracleJSONDocuments)).reset().write(" JSON docs, ");
-			term.bold().bright().write(String.format("%,d", numberOfOracleIndexes)).reset().write(" index(es), ");
-			if (totalOracleSize / (1024d * 1024d * 1024d) > 1024d) {
-				term.bold().bright().write(String.format("%.1f", totalOracleSize / (1024d * 1024d * 1024d * 1024d))).reset().write(" TB").clearToEndOfLine();
-			}
-			else if (totalOracleSize / (1024d * 1024d) > 1024d) {
-				term.bold().bright().write(String.format("%.1f", totalOracleSize / (1024d * 1024d * 1024d))).reset().write(" GB").clearToEndOfLine();
-			}
-			else {
-				term.bold().bright().write(String.format("%.1f", totalOracleSize / (1024d * 1024d))).reset().write(" MB").clearToEndOfLine();
-			}
+			term.bold().bright().write(String.format("%,d", numberOfOracleCollections)).reset().write(String.format(" collection%s, ", numberOfOracleCollections > 1 ? "s" : ""));
+			term.bold().bright().write(String.format("%,d", numberOfOracleJSONDocuments)).reset().write(String.format(" JSON doc%s, ", numberOfOracleJSONDocuments > 1 ? "s" : ""));
+			term.bold().bright().write(String.format("%,d", numberOfOracleIndexes)).reset().write(String.format(" index%s, ", numberOfOracleIndexes > 1 ? "es" : ""));
+			writeSize(term, totalOracleSize);
+		}
+		else {
+			term.write(" connecting...");
 		}
 		term.newline();
 
@@ -115,14 +114,35 @@ public class ASCIIGUI extends TimerTask {
 			term.reset().write("|");
 
 			if (i == 0) {
-				if(!collectionsProgressBars.get(i).isFinished()) {
-					term.write(" <= pending");
-				} else {
-					term.write("           ");
+				if (!collectionsProgressBars.get(i).isFinished()) {
+					if(collectionsIndexes.get(0).isIndexing()) {
+						term.write(" <= indexing");
+					} else {
+						term.write(" <= copying");
+					}
 				}
+				else {
+					term.write(String.format(" %d index%s", collectionsIndexes.get(0).doneOracleIndexes,collectionsIndexes.get(0).doneOracleIndexes > 1 ? "es": ""))
+					.clearToEndOfLine();
+				}
+			} else {
+				term.write(String.format(" %d index%s", collectionsIndexes.get(i).doneOracleIndexes,collectionsIndexes.get(i).doneOracleIndexes > 1 ? "es": ""))
+				.clearToEndOfLine();
 			}
 
 			term.newline();
+		}
+	}
+
+	private void writeSize(XYTerminalOutput term, double dbSize) {
+		if (dbSize / (1024d * 1024d * 1024d) > 1024d) {
+			term.bold().bright().write(String.format("%.1f", dbSize / (1024d * 1024d * 1024d * 1024d))).reset().write(" TB").clearToEndOfLine();
+		}
+		else if (dbSize / (1024d * 1024d) > 1024d) {
+			term.bold().bright().write(String.format("%.1f", dbSize / (1024d * 1024d * 1024d))).reset().write(" GB").clearToEndOfLine();
+		}
+		else {
+			term.bold().bright().write(String.format("%.1f", dbSize / (1024d * 1024d))).reset().write(" MB").clearToEndOfLine();
 		}
 	}
 
@@ -200,30 +220,27 @@ public class ASCIIGUI extends TimerTask {
 							prevSnap = snap;
 
 							if (bytesReceivedFromClientRealInMBPerSec >= 0d) {
-								speed = Math.min(32.99f, bytesReceivedFromClientRealInMBPerSec / 16f);
+								speed = Math.min(0f, bytesReceivedFromClientRealInMBPerSec / 16f);
 								maxBytesReceivedFromClientRealInMBPerSec = Math.max(maxBytesReceivedFromClientRealInMBPerSec, bytesReceivedFromClientRealInMBPerSec);
 								//System.out.println(String.format("%.1f MB/s", (bytesReceivedFromClientReal/(1024f*1024f))));
 							}
 							else {
 								speed = 0;
 							}
-/*
-						final String speedStr = bytesReceivedFromClientRealInMBPerSec <= 1024f ? String.format("%.1f MB/s", bytesReceivedFromClientRealInMBPerSec) : String.format("%.3f GB/s", bytesReceivedFromClientRealInMBPerSec / 1024f);
 
-						TerminalOutput.Color textColor;
-						if (speed < (128 / 4f * 0.8f)) {
-							textColor = TerminalOutput.Color.Green;
-						}
-						else if (speed < (128 / 4f * 0.9f)) {
-							textColor = TerminalOutput.Color.Yellow;
-						}
-						else {
-							textColor = TerminalOutput.Color.Red;
-						}
-//MongoDB 5.0.5  [                     0.0 MB/s                     ] Oracle 19.14
+							if ("0.0".equals(String.format("%.1f", (bytesReceivedFromClientRealInMBPerSec/(1024f*1024f))))) {
+								speedColor = TerminalOutput.Color.White;
+							}
+							else if (speed < (128 / 4f * 0.8f)) {
+								speedColor = TerminalOutput.Color.Green;
+							}
+							else if (speed < (128 / 4f * 0.9f)) {
+								speedColor = TerminalOutput.Color.Yellow;
+							}
+							else {
+								speedColor = TerminalOutput.Color.Red;
+							}
 
-						TERM.reset().moveTo(40-(speedStr.length()-5), 2).bold().bright().foreground(textColor).write(speedStr);
-*/
 							mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec);
 						}
 					}
@@ -311,7 +328,7 @@ public class ASCIIGUI extends TimerTask {
 		finishLastCollection();
 		collections.add(0, newCollectionName);
 		collectionsProgressBars.add(0, currentCollectionProgressBar = new ASCIICollectionProgressBar(50, System.currentTimeMillis()));
-		collectionsIndexes.add(0,new CollectionIndexesInfo(mongoCollection));
+		collectionsIndexes.add(0, new CollectionIndexesInfo(mongoCollection));
 	}
 
 	public synchronized void finishLastCollection() {
@@ -336,5 +353,23 @@ public class ASCIIGUI extends TimerTask {
 	public void flushTerminal() {
 		write(term);
 		term.moveToBottomScreen(0).reset().newline();
+	}
+
+	public void setDestinationDatabaseInstances(int destinationDatabaseInstances) {
+		this.destinationDatabaseInstances = destinationDatabaseInstances;
+	}
+
+	public int getDestinationDatabaseInstances() {
+		return destinationDatabaseInstances;
+	}
+
+	public void startIndex(String indexName) {
+		collectionsIndexes.get(0).startIndex(indexName);
+		collectionsProgressBars.get(0).addIndex(indexName, collectionsIndexes.get(0).expectedOracleIndexes);
+	}
+
+	public void endIndex(String indexName) {
+		addNewDestinationDatabaseIndex();
+		collectionsIndexes.get(0).endIndex();
 	}
 }

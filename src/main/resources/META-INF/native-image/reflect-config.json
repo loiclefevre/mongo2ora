@@ -443,6 +443,10 @@
     {"name":"setExplicitCachingEnabled","parameterTypes":["boolean"] }, 
     {"name":"setImplicitCachingEnabled","parameterTypes":["boolean"] }, 
     {"name":"setStatementCacheSize","parameterTypes":["int"] }
+  ],
+  "queriedMethods":[
+    {"name":"cancel","parameterTypes":[] }, 
+    {"name":"getCurrentSchema","parameterTypes":[] }
   ]
 },
 {
@@ -13566,6 +13570,9 @@
 {
   "name":"org.apache.log4j.WriterAppender",
   "queryAllPublicMethods":true
+},
+{
+  "name":"org.bson.codecs.record.RecordCodecProvider"
 },
 {
   "name":"org.glassfish.json.JsonProviderImpl",

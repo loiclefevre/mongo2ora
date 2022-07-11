@@ -6,8 +6,12 @@ import org.bson.Document;
 import java.util.Arrays;
 
 public class CollectionIndexesInfo {
-	private int totalMongoDBIndexes;
-	private int expectedOracleIndexes;
+	public int totalMongoDBIndexes;
+	public int expectedOracleIndexes;
+	public int doneOracleIndexes;
+	public String currentOracleIndexName;
+	public long currentOracleIndexStartTime = -1;
+	public long currentOracleIndexEndTime = -1;
 
 	public CollectionIndexesInfo(MongoCollection<Document> mongoCollection) {
 		initialize(mongoCollection);
@@ -29,4 +33,23 @@ public class CollectionIndexesInfo {
 		}
 	}
 
+	public void initializeIndexStartTime() {
+		if(currentOracleIndexStartTime == -1) {
+			currentOracleIndexStartTime = System.currentTimeMillis();
+		}
+	}
+
+	public void startIndex(String indexName) {
+		initializeIndexStartTime();
+		currentOracleIndexName = indexName;
+	}
+
+	public boolean isIndexing() {
+		return currentOracleIndexStartTime != -1;
+	}
+
+	public void endIndex() {
+		doneOracleIndexes++;
+		currentOracleIndexEndTime = System.currentTimeMillis();
+	}
 }

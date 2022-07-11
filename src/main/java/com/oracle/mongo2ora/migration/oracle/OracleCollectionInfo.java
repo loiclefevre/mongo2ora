@@ -167,7 +167,7 @@ public class OracleCollectionInfo {
 		try (Connection c = mediumPDS.getConnection()) {
 			try (Statement s = c.createStatement()) {
 //				System.out.print("Enabling JSON constraint...");
-				System.out.flush();
+				//System.out.flush();
 				if (isJsonConstraintName != null) {
 //					System.out.println("Re-Enabling Is JSON constraint NOVALIDATE");
 					s.execute("alter table " + collectionName + " modify constraint " + isJsonConstraintName + " enable novalidate");
@@ -177,7 +177,7 @@ public class OracleCollectionInfo {
 				}
 //				System.out.println("OK");
 
-//				gui.startIndex("primary key");
+				gui.startIndex("primary key");
 
 //				System.out.print("Adding primary key constraint and index...");
 //				System.out.flush();
@@ -224,8 +224,7 @@ public class OracleCollectionInfo {
 					}
 				}
 
-//				gui.endIndex("primary key");
-				gui.addNewDestinationDatabaseIndex();
+				gui.endIndex("primary key");
 
 				// manage other MongoDB indexes
 				final Properties props = new Properties();
@@ -294,20 +293,20 @@ public class OracleCollectionInfo {
 
 							//System.out.println(SQLStatement);
 							start = System.currentTimeMillis();
-//							gui.startIndex(indexMetadata.getString("name"));
+							gui.startIndex(indexMetadata.getString("name"));
 							s.execute(SQLStatement);
 //							System.out.println("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
-//							gui.endIndex(indexMetadata.getString("name"));
+							gui.endIndex(indexMetadata.getString("name"));
 						} else {
 //							System.out.println("Normal index");
 							final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getString("name"), getCreateIndexColumns(collectionName, keys, fieldsInfo), indexMetadata.getBoolean("unique"));
 
 //							System.out.println(indexSpec);
 							start = System.currentTimeMillis();
-//							gui.startIndex(indexMetadata.getString("name"));
+							gui.startIndex(indexMetadata.getString("name"));
 							sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
 //							System.out.println("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
-//							gui.endIndex(indexMetadata.getString("name"));
+							gui.endIndex(indexMetadata.getString("name"));
 						}
 					}
 				}
@@ -322,10 +321,10 @@ public class OracleCollectionInfo {
                     }*/
 
 					start = System.currentTimeMillis();
-//					gui.startIndex("search_index");
+					gui.startIndex("search_index");
 					s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (json_document) FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
 //					System.out.println("Created Search Index (every 1s sync) in " + getDurationSince(start));
-//					gui.endIndex("search_index");
+					gui.endIndex("search_index");
 				}
 
 				s.execute("ALTER SESSION DISABLE PARALLEL DDL");
