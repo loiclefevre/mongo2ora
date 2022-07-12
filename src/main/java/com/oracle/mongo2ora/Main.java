@@ -84,6 +84,7 @@ public class Main {
 	public static void main(final String[] args) {
 		// For Autonomous Database CMAN load balancing
 		Security.setProperty("networkaddress.cache.ttl", "0");
+		Security.setProperty("oracle.jdbc.fanEnabled", "false");
 
 		Locale.setDefault(Locale.US);
 
