@@ -136,11 +136,11 @@
             <artifactId>ucp</artifactId>
             <version>${oracle.jdbc.version}</version>
         </dependency>
-        <!-- dependency>
+        <dependency>
             <groupId>com.oracle.database.ha</groupId>
             <artifactId>ons</artifactId>
             <version>${oracle.jdbc.version}</version>
-        </dependency -->
+        </dependency>
         <!--dependency>
             <groupId>com.oracle.</groupId>
             <artifactId>ojdl</artifactId>
