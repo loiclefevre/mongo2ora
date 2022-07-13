@@ -9,8 +9,11 @@ public class ASCIIProgressBar {
 	private final int width;
 	private final long startTime;
 	private double speed;
+	private double maxSpeed;
 	private String speedString = "0.0 MB/s";
+	private String maxSpeedString = " (max: 0.0 MB/s)";
 	private String unit = "MB/s";
+	private String maxUnit = "MB/s";
 	private TerminalOutput.Color speedColor;
 	private double progressionPercentage;
 	private int progressBackgroundLength;
@@ -20,11 +23,11 @@ public class ASCIIProgressBar {
 
 	public ASCIIProgressBar(int width, long startTime) {
 		this.width = width;
-		this.dashPosition = width / 2;
+		this.dashPosition = 2 * width / 3;
 		this.startTime = startTime;
 	}
 
-	public TerminalOutput.Color setSpeed(double speedInMBPerSec) {
+	public TerminalOutput.Color setSpeed(double speedInMBPerSec, double maxSpeedInMBPerSec) {
 		this.speed = speedInMBPerSec;
 		if(speed <= 1024d) {
 			unit = "MB/s";
@@ -33,6 +36,16 @@ public class ASCIIProgressBar {
 			unit = "GB/s";
 		}
 		speedString = String.format("%.1f %s",speed, unit);
+
+		this.maxSpeed = maxSpeedInMBPerSec;
+		if(maxSpeed <= 1024d) {
+			maxUnit = "MB/s";
+		} else {
+			maxSpeed = maxSpeed / 1024d;
+			maxUnit = "GB/s";
+		}
+		maxSpeedString = String.format(" (max: %.1f %s)",maxSpeed, maxUnit);
+
 
 		//System.out.println(speedInMBPerSec+", "+speedString);
 
@@ -58,7 +71,7 @@ public class ASCIIProgressBar {
 	}
 
 	public void write(XYTerminalOutput term) {
-		int spacesBeforeSpeed = dashPosition - speedString.length() -1;
+		int spacesBeforeSpeed = dashPosition - speedString.length() -maxSpeedString.length() -1;
 		final String time = timeCompleted == null ? Tools.getDurationSince(startTime) : timeCompleted;
 		final int timeStartingPosition =dashPosition+2;
 		final int timeEndingPosition = timeStartingPosition + time.length();
@@ -78,7 +91,12 @@ public class ASCIIProgressBar {
 			} else
 			if(i < dashPosition ) {
 				//term.bold().bright().foreground(TerminalOutput.Color.White).write("["+speedString+"]");
-				term.bold().bright().foreground(TerminalOutput.Color.White).write(speedString.substring(i-spacesBeforeSpeed-1,i-spacesBeforeSpeed));
+				if(i < dashPosition - maxSpeedString.length()) {
+					term.bold().bright().foreground(TerminalOutput.Color.White).write(speedString.substring(i - spacesBeforeSpeed - 1, i - spacesBeforeSpeed));
+				} else {
+					term.normal().write(String.format("\u001b[38;2;%d;%d;%dm",255,203,107)).write(maxSpeedString.substring(i - spacesBeforeSpeed - 1 - speedString.length(), i - spacesBeforeSpeed - speedString.length()));
+				}
+				//term.normal().foreground(TerminalOutput.Color.Cyan).write(maxSpeedString);
 			} else
 			if(i == dashPosition) {
 				term.normal().foreground(TerminalOutput.Color.White).write(" ");

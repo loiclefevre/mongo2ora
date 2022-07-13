@@ -258,7 +258,7 @@ public class Main {
 				final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collectionName);
 
 				// disable is JSON constraint, remove indexes...
-				final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, mongoCollection);
+				final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, mongoCollection, AUTONOMOUS_DATABASE);
 
 				if (!oracleCollectionInfo.emptyDestinationCollection) {
 					//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");

@@ -23,7 +23,7 @@ public class ASCIICollectionProgressBar {
 
 	public ASCIICollectionProgressBar(int width, long startTime) {
 		this.width = width;
-		this.dashPosition = width / 2;
+		this.dashPosition = 2 * width / 3;
 		this.startTime = startTime;
 	}
 

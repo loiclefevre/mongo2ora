@@ -29,6 +29,7 @@ public class OracleCollectionInfo {
 
 	private final String user;
 	private final String collectionName;
+	private final boolean autonomousDatabase;
 	public String isJsonConstraintName;
 	private boolean isJsonConstraintEnabled;
 	private String isJsonConstraintText;
@@ -39,14 +40,15 @@ public class OracleCollectionInfo {
 	public boolean emptyDestinationCollection;
 	//public boolean needSearchIndex;
 
-	public OracleCollectionInfo(String user, String collectionName) {
+	public OracleCollectionInfo(String user, String collectionName, boolean autonomousDatabase) {
 		this.user = user;
 		this.collectionName = collectionName;
+		this.autonomousDatabase = autonomousDatabase;
 	}
 
 
-	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection, MongoCollection<Document> mongoCollection) throws SQLException, OracleException {
-		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName);
+	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection, MongoCollection<Document> mongoCollection, boolean autonomousDatabase) throws SQLException, OracleException {
+		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName, autonomousDatabase);
 
 		try (Connection c = adminPDS.getConnection()) {
 			try (Statement s = c.createStatement()) {
@@ -68,7 +70,7 @@ public class OracleCollectionInfo {
 				ret.emptyDestinationCollection = true;
 
 				if (sodaCollection == null) {
-					//System.out.println("SODA collection does not exist => creating it");
+					LOGGER.info("SODA collection does not exist => creating it");
 					sodaCollection = db.admin().createCollection(collectionName);
 					if (sodaCollection == null) {
 						throw new IllegalStateException("Can't create SODA collection: " + collectionName);
@@ -80,24 +82,29 @@ public class OracleCollectionInfo {
 							if (r.next() && r.getInt(1) == 1) {
 								// THERE IS AT LEAST ONE ROW!
 								if (dropAlreadyExistingCollection) {
-									//System.out.println("SODA collection does exist => dropping it (required with --drop CLI argument)");
+									LOGGER.warn("SODA collection does exist => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
-									//System.out.println("SODA collection does exist => re-creating it");
+									LOGGER.info("SODA collection does exist => re-creating it");
 									sodaCollection = db.admin().createCollection(collectionName);
+									if (sodaCollection == null) {
+										throw new IllegalStateException("Can't re-create SODA collection: " + collectionName);
+									}
 								}
 								else {
-									// avoid migrating data into non empty destination collection (no conflict to
-									// manage)
+									// avoid migrating data into non empty destination collection (no conflict to manage)
 									ret.emptyDestinationCollection = false;
 									return ret;
 								}
 							}
 							else {
 								if (dropAlreadyExistingCollection) {
-									//System.out.println("SODA collection does exist (with 0 row) => dropping it (required with --drop CLI argument)");
+									LOGGER.warn("SODA collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
-									//System.out.println("SODA collection does exist => re-creating it");
+									LOGGER.info("SODA collection does exist => re-creating it");
 									sodaCollection = db.admin().createCollection(collectionName);
+									if (sodaCollection == null) {
+										throw new IllegalStateException("Can't re-create SODA collection: " + collectionName);
+									}
 								}
 							}
 						}
@@ -150,15 +157,15 @@ public class OracleCollectionInfo {
 					if (r.next()) {
 						ret.primaryKeyIndexName = r.getString(1);
 						ret.primaryKeyIndexStatus = r.getString(2);
-//						System.out.println("Primary key found: " + ret.primaryKeyIndexName + " for collection " + collectionName + " with status " + ret.primaryKeyIndexStatus);
+						LOGGER.info("Primary key found: " + ret.primaryKeyIndexName + " for collection " + collectionName + " with status " + ret.primaryKeyIndexStatus);
 					}
 				}
 
-				if (ret.primaryKeyIndexName != null) {
-					LOGGER.info("Dropping primary key and associated index: "+ret.primaryKeyIndexName+" for collection "+collectionName);
-					LOGGER.info("Running: "+"alter table "+user+"."+collectionName+" drop primary key drop index");
+				if (ret.primaryKeyIndexName != null && !autonomousDatabase) {
+					LOGGER.info("Dropping primary key and associated index: " + ret.primaryKeyIndexName + " for collection " + collectionName);
+					LOGGER.info("Running: " + "alter table " + user + "." + collectionName + " drop primary key drop index");
 					p.execute("alter table " + user + "." + collectionName + " drop primary key drop index");
-					LOGGER.info("Running: "+"alter table "+user+"."+collectionName+" drop primary key drop index DONE!");
+					LOGGER.info("Running: " + "alter table " + user + "." + collectionName + " drop primary key drop index DONE!");
 				}
 			}
 		}
@@ -207,13 +214,8 @@ public class OracleCollectionInfo {
 						}
 					}
 
-					if ("UNUSABLE".equalsIgnoreCase(currentPKIndexStatus)) {
+					if (autonomousDatabase && "UNUSABLE".equalsIgnoreCase(currentPKIndexStatus)) {
 
-/*                        System.out.println("CREATE UNIQUE INDEX "+user+"."+primaryKeyIndexName+" ON "+user+"."+collectionName+"(ID) PARALLEL"+(maxParallelDegree == -1 ? "" : " "+maxParallelDegree));
-                        s.execute("CREATE UNIQUE INDEX "+user+"."+primaryKeyIndexName+" ON "+user+"."+collectionName+"(ID) PARALLEL"+(maxParallelDegree == -1 ? "" : " "+maxParallelDegree));
-                        System.out.println("ALTER TABLE "+user+"."+collectionName+" ADD CONSTRAINT "+primaryKeyIndexName+" PRIMARY KEY (ID) USING INDEX "+user+"."+primaryKeyIndexName+" ENABLE NOVALIDATE");
-                        s.execute("ALTER TABLE "+user+"."+collectionName+" ADD CONSTRAINT "+primaryKeyIndexName+" PRIMARY KEY (ID) USING INDEX "+user+"."+primaryKeyIndexName+" ENABLE NOVALIDATE");
-                        System.out.println("Created PK constraint and index with parallel degree of "+maxParallelDegree+" in "+ getDurationSince(start)); */
 
 						LOGGER.info("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
 						s.execute("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
@@ -221,6 +223,13 @@ public class OracleCollectionInfo {
 					}
 					else {
 						LOGGER.info("PK Index status is: " + currentPKIndexStatus);
+						if ("?".equals(currentPKIndexStatus)) {
+							LOGGER.info("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + "." + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+							s.execute("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + "." + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+							LOGGER.info("ALTER TABLE " + user + "." + collectionName + " ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
+							s.execute("ALTER TABLE " + user + "." + collectionName + " ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
+							LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+						}
 					}
 				}
 				else {
@@ -319,10 +328,10 @@ public class OracleCollectionInfo {
 								gui.endIndex(indexMetadata.getString("name"));
 							}
 							else {
-							LOGGER.info("Normal index");
+								LOGGER.info("Normal index");
 								final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getString("name"), getCreateIndexColumns(collectionName, keys, fieldsInfo), indexMetadata.getBoolean("unique"));
 
-							LOGGER.info(indexSpec);
+								LOGGER.info(indexSpec);
 								start = System.currentTimeMillis();
 								gui.startIndex(indexMetadata.getString("name"));
 								sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
@@ -353,8 +362,8 @@ public class OracleCollectionInfo {
 				}
 			}
 		}
-		catch(SQLException sqle) {
-			LOGGER.error("During finish step of collection "+collectionName, sqle);
+		catch (SQLException sqle) {
+			LOGGER.error("During finish step of collection " + collectionName, sqle);
 			throw sqle;
 		}
 	}

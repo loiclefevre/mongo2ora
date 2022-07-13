@@ -243,15 +243,15 @@ public class ASCIIGUI extends TimerTask {
 							prevSnap = snap;
 
 							if (bytesReceivedFromClientRealInMBPerSec >= 0d) {
-								speed = Math.min(0f, bytesReceivedFromClientRealInMBPerSec / 16f);
+								//speed = Math.min(0f, bytesReceivedFromClientRealInMBPerSec / 16f);
 								maxBytesReceivedFromClientRealInMBPerSec = Math.max(maxBytesReceivedFromClientRealInMBPerSec, bytesReceivedFromClientRealInMBPerSec);
 								//System.out.println(String.format("%.1f MB/s", (bytesReceivedFromClientReal/(1024f*1024f))));
 							}
-							else {
+							/*else {
 								speed = 0;
-							}
+							}*/
 
-							speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec);
+							speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec, maxBytesReceivedFromClientRealInMBPerSec);
 						}
 					}
 				}
