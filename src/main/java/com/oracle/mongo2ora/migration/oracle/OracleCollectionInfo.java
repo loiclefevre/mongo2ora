@@ -353,6 +353,9 @@ public class OracleCollectionInfo {
 				}
 			}
 		}
+		catch(SQLException sqle) {
+			LOGGER.error("During finish step of collection "+collectionName, sqle);
+		}
 	}
 
 	private String getCreateIndexColumns(String collectionName, Document keys, Map<String, FieldInfo> fieldsInfo) {

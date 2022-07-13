@@ -245,6 +245,7 @@
                         <!-- buildArg>- -gc=G1</buildArg>
                         <buildArg>-R:MaxRAMPercentage=95.0</buildArg>
                         <buildArg>-R:MaximumYoungGenerationSizePercent=80</buildArg>
+                        <buildArg>-H:G1HeapRegionSize=32M</buildArg>
                         <buildArg>-H:-UseCompressedReferences</buildArg -->
 
                         <!-- Profile Guided Optimization, GraalVM EE only -->
