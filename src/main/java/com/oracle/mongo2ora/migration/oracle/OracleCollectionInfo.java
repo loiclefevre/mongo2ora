@@ -355,6 +355,7 @@ public class OracleCollectionInfo {
 		}
 		catch(SQLException sqle) {
 			LOGGER.error("During finish step of collection "+collectionName, sqle);
+			throw sqle;
 		}
 	}
 
