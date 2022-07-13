@@ -3,9 +3,6 @@ MongoDB to Oracle data migration tool
 
 ## Setup
 
-### Install ojdl.jar inside local Maven repository
-\apache-maven-3.8.1\bin>mvn install:install-file -Dfile=<fqpn>\lib\ojdl.jar -DgroupId=com.oracle -DartifactId=ojdl -Dversion=21.6.0.0.1 -Dpackaging=jar
-
 ### Create admin user in Oracle database
 create user admin identified by "My_Strong_Pa55word" DEFAULT TABLESPACE USERS TEMPORARY TABLESPACE TEMP;
 alter user admin quota unlimited on users;
