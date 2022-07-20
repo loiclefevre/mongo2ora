@@ -110,13 +110,15 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 						final MyBSONDecoder decoder = new MyBSONDecoder(true);
 
 						long mongoDBFetchStart;
-						long mongoDBFetch=0;
+						long mongoDBFetch = 0;
 						long bsonConvertStart;
-						long bsonConvert =0;
+						long bsonConvert = 0;
 						long serializeOSONStart;
-						long serializeOSON=0;
+						long serializeOSON = 0;
 						long jdbcBatchExecuteStart;
-						long jdbcBatchExecute=0;
+						long jdbcBatchExecute = 0;
+						long addBatchStart;
+						long addBatch = 0;
 
 						while (cursor.hasNext()) {
 							//out.reset();
@@ -127,7 +129,7 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 							// -500 MB/sec
 							bsonConvertStart = System.nanoTime();
 							decoder.convertBSONToOSON(doc);
-							bsonConvert += (System.nanoTime()-bsonConvertStart);
+							bsonConvert += (System.nanoTime() - bsonConvertStart);
 							bsonLength += decoder.getBsonLength();
 
 //                                OracleJsonGenerator ogen = factory.createJsonBinaryGenerator(out);
@@ -142,7 +144,7 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 							byte[] osonData;
 							serializeOSONStart = System.nanoTime();
 							p.setBytes(3, osonData = decoder.getOSONData());
-							serializeOSON += (System.nanoTime()-serializeOSONStart);
+							serializeOSON += (System.nanoTime() - serializeOSONStart);
 //								p.setObject(3,osonData = decoder.getOSONData(), OracleTypes.JSON);
 //								p.setString(3, doc.toJson());
 //								osonData = doc.toJson().getBytes(StandardCharsets.UTF_8);
@@ -156,7 +158,9 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 
 							osonLength += osonData.length;
 
+							addBatchStart = System.nanoTime();
 							p.addBatch();
+							addBatch += (System.nanoTime() - addBatchStart);
 
 							batchSizeCounter++;
 
@@ -164,7 +168,7 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 								count += batchSizeCounter;
 								jdbcBatchExecuteStart = System.nanoTime();
 								p.executeLargeBatch();
-								jdbcBatchExecute += (System.nanoTime()-jdbcBatchExecuteStart);
+								jdbcBatchExecute += (System.nanoTime() - jdbcBatchExecuteStart);
 								batchSizeCounter = 0;
 							}
 						}
@@ -173,12 +177,12 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 							count += batchSizeCounter;
 							jdbcBatchExecuteStart = System.nanoTime();
 							p.executeLargeBatch();
-							jdbcBatchExecute += (System.nanoTime()-jdbcBatchExecuteStart);
+							jdbcBatchExecute += (System.nanoTime() - jdbcBatchExecuteStart);
 						}
 
 						realConnection.commit(commitOptions);
 
-						LOGGER.info("count="+count+", mongoDBFetch="+mongoDBFetch+", bsonConvert="+bsonConvert+", serializeOSON="+serializeOSON+", jdbcBatchExecute="+jdbcBatchExecute);
+						LOGGER.info("count=" + count + ", mongoDBFetch=" + mongoDBFetch + ", bsonConvert=" + bsonConvert + ", serializeOSON=" + serializeOSON + ", addBatch=" + addBatch + ", jdbcBatchExecute=" + jdbcBatchExecute);
 
 						//final long duration = System.currentTimeMillis() - start;
 						gui.updateDestinationDatabaseDocuments(count, osonLength);
