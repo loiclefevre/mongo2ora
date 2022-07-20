@@ -40,6 +40,10 @@
   "methods":[{"name":"details","parameterTypes":["int","int","int","int","long","long","int"] }]
 },
 {
+  "name":"net.rubygrapefruit.platform.internal.FunctionResult",
+  "methods":[{"name":"failed","parameterTypes":["java.lang.String","int","int","java.lang.String"] }]
+},
+{
   "name":"org.graalvm.jniutils.JNIExceptionWrapperEntryPoints",
   "methods":[{"name":"getClassName","parameterTypes":["java.lang.Class"] }]
 },
