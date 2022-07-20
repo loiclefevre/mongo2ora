@@ -7,6 +7,8 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.diagnostics.logging.Logger;
+import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.Configuration;
 import com.oracle.mongo2ora.migration.ConversionInformation;
@@ -65,6 +67,8 @@ import static java.util.stream.Collectors.toList;
  */
 public class Main {
 	public static final String VERSION = "1.1.0";
+
+	private static final Logger LOGGER = Loggers.getLogger("main");
 
 	public static boolean ENABLE_COLORS = true;
 
@@ -144,6 +148,9 @@ public class Main {
 
 
 		//System.out.println("Counter threads: " + (Math.min(conf.cores * 2, Runtime.getRuntime().availableProcessors())));
+		LOGGER.info( "COUNTER THREADS="+Math.min(conf.cores * 2, Runtime.getRuntime().availableProcessors()));
+		LOGGER.info( "COUNTER THREADS PRIORITY="+(WANTED_THREAD_PRIORITY - 1));
+
 		counterThreadPool = Executors.newFixedThreadPool(Math.min(conf.cores * 2, Runtime.getRuntime().availableProcessors()), new ThreadFactory() {
 			private final AtomicInteger threadNumber = new AtomicInteger(0);
 			private final ThreadGroup group = new ThreadGroup("MongoDBMigration");
@@ -163,6 +170,10 @@ public class Main {
 
 //        System.out.println("Worker threads: "+(conf.useRSI ? 2* conf.cores/3 : conf.cores));
 		//System.out.println("Worker threads: 8");
+
+		LOGGER.info( "WORKER THREADS="+conf.cores);
+		LOGGER.info( "WORKER THREADS PRIORITY="+WANTED_THREAD_PRIORITY);
+
 		workerThreadPool = Executors.newFixedThreadPool(conf.cores /*conf.useRSI ? 2* conf.cores/3 : conf.cores*/,
 				new ThreadFactory() {
 					private final AtomicInteger threadNumber = new AtomicInteger(0);
