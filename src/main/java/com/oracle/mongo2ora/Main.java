@@ -56,6 +56,8 @@ import static java.util.stream.Collectors.toList;
 /**
  * TODO:
  * - summary at the end
+ *   - add real table size
+ * - add index size
  * OK display index creation
  * OK work on Autonomous database detection and adapt with OSON support
  * - work on Autonomous database detection and adapt with JSON datatype native support

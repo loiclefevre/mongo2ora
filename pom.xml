@@ -136,11 +136,11 @@
             <artifactId>ucp</artifactId>
             <version>${oracle.jdbc.version}</version>
         </dependency>
-        <dependency>
+        <!-- dependency>
             <groupId>com.oracle.database.ha</groupId>
             <artifactId>ons</artifactId>
             <version>19.15.0.0.1</version>
-        </dependency>
+        </dependency -->
         <!--dependency>
             <groupId>com.oracle.</groupId>
             <artifactId>ojdl</artifactId>
@@ -245,8 +245,6 @@
 
                         <!-- G1 GC -->
                         <buildArg>--gc=G1</buildArg>
-                        <buildArg>-R:MaxRAMPercentage=95.0</buildArg>
-                        <buildArg>-R:MaximumYoungGenerationSizePercent=80</buildArg>
                         <buildArg>-H:G1HeapRegionSize=32M</buildArg>
                         <buildArg>-H:-UseCompressedReferences</buildArg>
                         <buildArg>-H:+NativeArchitecture</buildArg>
