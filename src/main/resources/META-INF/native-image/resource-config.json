@@ -68,6 +68,10 @@
       ]
     }, 
     {
+      "name":"oracle.net.mesg.Message",
+      "locales":[""]
+    }, 
+    {
       "name":"oracle.ucp.util.UCPMessages",
       "locales":[
         "", 
