@@ -4,6 +4,8 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
+import com.mongodb.diagnostics.logging.Logger;
+import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.ConversionInformation;
 import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
@@ -22,6 +24,8 @@ import java.util.concurrent.CompletableFuture;
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
 
 public class DirectPathBSON2OSONCollectionConverter implements Runnable {
+	private static final Logger LOGGER = Loggers.getLogger("converter");
+
 	private final CollectionCluster work;
 	private final CompletableFuture<ConversionInformation> publishingCf;
 	private final PoolDataSource pds;
@@ -105,12 +109,25 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 
 						final MyBSONDecoder decoder = new MyBSONDecoder(true);
 
+						long mongoDBFetchStart;
+						long mongoDBFetch=0;
+						long bsonConvertStart;
+						long bsonConvert =0;
+						long serializeOSONStart;
+						long serializeOSON=0;
+						long jdbcBatchExecuteStart;
+						long jdbcBatchExecute=0;
+
 						while (cursor.hasNext()) {
 							//out.reset();
+							mongoDBFetchStart = System.nanoTime();
 							final RawBsonDocument doc = cursor.next();
+							mongoDBFetch += (System.nanoTime() - mongoDBFetchStart);
 
 							// -500 MB/sec
+							bsonConvertStart = System.nanoTime();
 							decoder.convertBSONToOSON(doc);
+							bsonConvert += (System.nanoTime()-bsonConvertStart);
 							bsonLength += decoder.getBsonLength();
 
 //                                OracleJsonGenerator ogen = factory.createJsonBinaryGenerator(out);
@@ -123,7 +140,9 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 //                                p.setString(1, doc.get("_id").toString());
 //                                p.setBytes(2, out.toByteArray());
 							byte[] osonData;
+							serializeOSONStart = System.nanoTime();
 							p.setBytes(3, osonData = decoder.getOSONData());
+							serializeOSON += (System.nanoTime()-serializeOSONStart);
 //								p.setObject(3,osonData = decoder.getOSONData(), OracleTypes.JSON);
 //								p.setString(3, doc.toJson());
 //								osonData = doc.toJson().getBytes(StandardCharsets.UTF_8);
@@ -143,17 +162,23 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 
 							if (batchSizeCounter >= batchSize) {
 								count += batchSizeCounter;
+								jdbcBatchExecuteStart = System.nanoTime();
 								p.executeLargeBatch();
+								jdbcBatchExecute += (System.nanoTime()-jdbcBatchExecuteStart);
 								batchSizeCounter = 0;
 							}
 						}
 
 						if (batchSizeCounter > 0) {
 							count += batchSizeCounter;
+							jdbcBatchExecuteStart = System.nanoTime();
 							p.executeLargeBatch();
+							jdbcBatchExecute += (System.nanoTime()-jdbcBatchExecuteStart);
 						}
 
 						realConnection.commit(commitOptions);
+
+						LOGGER.info("count="+count+", mongoDBFetch="+mongoDBFetch+", bsonConvert="+bsonConvert+", serializeOSON="+serializeOSON+", jdbcBatchExecute="+jdbcBatchExecute);
 
 						//final long duration = System.currentTimeMillis() - start;
 						gui.updateDestinationDatabaseDocuments(count, osonLength);
