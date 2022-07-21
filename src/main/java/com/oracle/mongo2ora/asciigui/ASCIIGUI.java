@@ -1,6 +1,8 @@
 package com.oracle.mongo2ora.asciigui;
 
 import com.mongodb.client.MongoCollection;
+import com.mongodb.diagnostics.logging.Logger;
+import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.migration.CollectionIndexesInfo;
 import com.oracle.mongo2ora.util.XYTerminalOutput;
 import net.rubygrapefruit.platform.terminal.TerminalOutput;
@@ -21,6 +23,8 @@ import java.util.TimerTask;
 import static com.oracle.mongo2ora.util.XYTerminalOutput.BrightRed;
 
 public class ASCIIGUI extends TimerTask {
+	private static final Logger LOGGER = Loggers.getLogger("gui");
+
 	private final String title;
 	private String sourceDatabase;
 	private boolean sourceDatabaseConnected;
@@ -286,6 +290,7 @@ public class ASCIIGUI extends TimerTask {
 
 							if (prevBytesReceivedFromClient > -1 && bytesReceivedFromClientRealInMBPerSec >= 0d) {
 								maxBytesReceivedFromClientRealInMBPerSec = Math.max(maxBytesReceivedFromClientRealInMBPerSec, bytesReceivedFromClientRealInMBPerSec);
+								LOGGER.info("Current throughput: "+bytesReceivedFromClientRealInMBPerSec+" MB/s; Maximum throughput: "+maxBytesReceivedFromClientRealInMBPerSec+" MB/s");
 								speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec, maxBytesReceivedFromClientRealInMBPerSec);
 							}
 						}
