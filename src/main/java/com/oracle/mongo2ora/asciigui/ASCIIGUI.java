@@ -221,9 +221,9 @@ public class ASCIIGUI extends TimerTask {
 	private long bytesReceivedFromClient;
 	private long snap;
 	private long prevSnap = -1;
-	private float bytesReceivedFromClientRealInMBPerSec;
-	private float maxBytesReceivedFromClientRealInMBPerSec = 0;
-	private float speed = 0f; // 0 to 63.99
+	private double bytesReceivedFromClientRealInMBPerSec;
+	private double maxBytesReceivedFromClientRealInMBPerSec = 0;
+	private double speed = 0f; // 0 to 63.99
 
 //	@Override
 //	public void run() {
@@ -282,7 +282,7 @@ public class ASCIIGUI extends TimerTask {
 						if (r.next()) {
 							prevTimestamp = r.getTimestamp(1);
 							prevBytesReceivedFromClient = r.getLong(2);
-							bytesReceivedFromClientRealInMBPerSec = r.getFloat(3);
+							bytesReceivedFromClientRealInMBPerSec = r.getDouble(3);
 
 							if (prevBytesReceivedFromClient > -1 && bytesReceivedFromClientRealInMBPerSec >= 0d) {
 								maxBytesReceivedFromClientRealInMBPerSec = Math.max(maxBytesReceivedFromClientRealInMBPerSec, bytesReceivedFromClientRealInMBPerSec);
