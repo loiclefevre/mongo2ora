@@ -11,7 +11,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -215,6 +217,7 @@ public class ASCIIGUI extends TimerTask {
 	}
 
 	private long prevBytesReceivedFromClient = -1;
+	private Timestamp prevTimestamp = new Timestamp(new Date().getTime());
 	private long bytesReceivedFromClient;
 	private long snap;
 	private long prevSnap = -1;
@@ -222,36 +225,69 @@ public class ASCIIGUI extends TimerTask {
 	private float maxBytesReceivedFromClientRealInMBPerSec = 0;
 	private float speed = 0f; // 0 to 63.99
 
+//	@Override
+//	public void run() {
+//		if (getPds() != null) {
+//			try (Connection c = getPds().getConnection()) {
+//				try (PreparedStatement p = c.prepareStatement("SELECT sum(VALUE) FROM gv$sysstat WHERE NAME = 'bytes received via SQL*Net from client'")) {
+//					try (ResultSet r = p.executeQuery()) {
+//						if (r.next()) {
+//							// first iteration
+//							if (prevBytesReceivedFromClient == -1) {
+//								prevBytesReceivedFromClient = r.getLong(1);
+//								prevSnap = System.currentTimeMillis();
+//							}
+//							else {
+//								bytesReceivedFromClient = r.getLong(1);
+//								snap = System.currentTimeMillis();
+//							}
+//
+//							bytesReceivedFromClientRealInMBPerSec = ((float) (bytesReceivedFromClient - prevBytesReceivedFromClient) / ((float) (snap - prevSnap) / 1000f)) / (1024f * 1024f);
+//							prevBytesReceivedFromClient = bytesReceivedFromClient;
+//							prevSnap = snap;
+//
+//							if (bytesReceivedFromClientRealInMBPerSec >= 0d) {
+//								//speed = Math.min(0f, bytesReceivedFromClientRealInMBPerSec / 16f);
+//								maxBytesReceivedFromClientRealInMBPerSec = Math.max(maxBytesReceivedFromClientRealInMBPerSec, bytesReceivedFromClientRealInMBPerSec);
+//								//System.out.println(String.format("%.1f MB/s", (bytesReceivedFromClientReal/(1024f*1024f))));
+//							}
+//							/*else {
+//								speed = 0;
+//							}*/
+//
+//							speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec, maxBytesReceivedFromClientRealInMBPerSec);
+//						}
+//					}
+//				}
+//			}
+//			catch (SQLException ignored) {
+//			}
+//		}
+//
+//		write(term);
+//	}
+
 	@Override
 	public void run() {
 		if (getPds() != null) {
 			try (Connection c = getPds().getConnection()) {
-				try (PreparedStatement p = c.prepareStatement("SELECT sum(VALUE) FROM gv$sysstat WHERE NAME = 'bytes received via SQL*Net from client'")) {
+				try (PreparedStatement p = c.prepareStatement(
+						"SELECT current_timestamp, sum(VALUE), ((sum(VALUE)-?)/(1024*1024))/extract(day from (current_timestamp-?)*86400) \n" +
+						"FROM gv$sysstat WHERE NAME = 'bytes received via SQL*Net from client'")) {
+
+					p.setLong(1,prevBytesReceivedFromClient);
+					p.setTimestamp(2,prevTimestamp);
+
 					try (ResultSet r = p.executeQuery()) {
 						if (r.next()) {
-							if (prevBytesReceivedFromClient == -1) {
-								prevBytesReceivedFromClient = r.getLong(1);
-								prevSnap = System.currentTimeMillis();
-							}
-							else {
-								bytesReceivedFromClient = r.getLong(1);
-								snap = System.currentTimeMillis();
-							}
+							prevTimestamp = r.getTimestamp(1);
+							prevBytesReceivedFromClient = r.getLong(2);
+							bytesReceivedFromClientRealInMBPerSec = r.getFloat(3);
 
-							bytesReceivedFromClientRealInMBPerSec = ((float) (bytesReceivedFromClient - prevBytesReceivedFromClient) / ((float) (snap - prevSnap) / 1000f)) / (1024f * 1024f);
-							prevBytesReceivedFromClient = bytesReceivedFromClient;
-							prevSnap = snap;
-
-							if (bytesReceivedFromClientRealInMBPerSec >= 0d) {
-								//speed = Math.min(0f, bytesReceivedFromClientRealInMBPerSec / 16f);
+							if (prevBytesReceivedFromClient > -1 && bytesReceivedFromClientRealInMBPerSec >= 0d) {
 								maxBytesReceivedFromClientRealInMBPerSec = Math.max(maxBytesReceivedFromClientRealInMBPerSec, bytesReceivedFromClientRealInMBPerSec);
-								//System.out.println(String.format("%.1f MB/s", (bytesReceivedFromClientReal/(1024f*1024f))));
+								speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec, maxBytesReceivedFromClientRealInMBPerSec);
 							}
-							/*else {
-								speed = 0;
-							}*/
-
-							speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec, maxBytesReceivedFromClientRealInMBPerSec);
 						}
 					}
 				}
