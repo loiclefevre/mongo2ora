@@ -271,6 +271,8 @@ public class ASCIIGUI extends TimerTask {
 //		write(term);
 //	}
 
+	private int turn = 0;
+
 	@Override
 	public void run() {
 		if (getPds() != null) {
@@ -284,11 +286,13 @@ public class ASCIIGUI extends TimerTask {
 
 					try (ResultSet r = p.executeQuery()) {
 						if (r.next()) {
+							turn++;
+
 							prevTimestamp = r.getTimestamp(1);
 							prevBytesReceivedFromClient = r.getLong(2);
 							bytesReceivedFromClientRealInMBPerSec = r.getDouble(3);
 
-							if (prevBytesReceivedFromClient > -1 && bytesReceivedFromClientRealInMBPerSec >= 0d) {
+							if (turn > 2 && bytesReceivedFromClientRealInMBPerSec >= 0d) {
 								maxBytesReceivedFromClientRealInMBPerSec = Math.max(maxBytesReceivedFromClientRealInMBPerSec, bytesReceivedFromClientRealInMBPerSec);
 								LOGGER.info("Current throughput: "+bytesReceivedFromClientRealInMBPerSec+" MB/s; Maximum throughput: "+maxBytesReceivedFromClientRealInMBPerSec+" MB/s");
 								speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec, maxBytesReceivedFromClientRealInMBPerSec);
