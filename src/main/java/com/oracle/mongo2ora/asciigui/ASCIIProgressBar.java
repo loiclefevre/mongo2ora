@@ -31,20 +31,22 @@ public class ASCIIProgressBar {
 		this.speed = speedInMBPerSec;
 		if(speed <= 1024d) {
 			unit = "MB/s";
+			speedString = String.format("%.1f %s",speed, unit);
 		} else {
-			speed = speed / 1024d;
+			speed /= 1024d;
 			unit = "GB/s";
+			speedString = String.format("%.1f %s",speed, unit);
 		}
-		speedString = String.format("%.1f %s",speed, unit);
 
 		this.maxSpeed = maxSpeedInMBPerSec;
 		if(maxSpeed <= 1024d) {
 			maxUnit = "MB/s";
+			maxSpeedString = String.format(" (max: %.1f %s)",maxSpeed, maxUnit);
 		} else {
-			maxSpeed = maxSpeed / 1024d;
+			maxSpeed /= 1024d;
 			maxUnit = "GB/s";
+			maxSpeedString = String.format(" (max: %.1f %s)",maxSpeed, maxUnit);
 		}
-		maxSpeedString = String.format(" (max: %.1f %s)",maxSpeed, maxUnit);
 
 
 		//System.out.println(speedInMBPerSec+", "+speedString);
