@@ -8,12 +8,26 @@ import org.bson.types.ObjectId;
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 
 public class MyBSON2OSONWriter implements BsonWriter {
-	private static final OracleJsonFactory factory = new OracleJsonFactory();
+	private final OracleJsonFactory factory = getFactoryFromCache();
+
+	final static Map<Long,OracleJsonFactory> factoryCache = new HashMap<>();
+
+	private static OracleJsonFactory getFactoryFromCache() {
+		OracleJsonFactory result;
+		if((result=factoryCache.get(Thread.currentThread().getId())) == null) {
+			result = new OracleJsonFactory();
+			factoryCache.put(Thread.currentThread().getId(),result);
+		}
+
+		return result;
+	}
+
 	private final ByteArrayOutputStream out = new ByteArrayOutputStream();
 	//private JsonGenerator gen;
 	private OracleJsonGenerator gen;
