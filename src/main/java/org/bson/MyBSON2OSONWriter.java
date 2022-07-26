@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public class MyBSON2OSONWriter implements BsonWriter {
-	private final OracleJsonFactory factory = new OracleJsonFactory();
+	private static final OracleJsonFactory factory = new OracleJsonFactory();
 	private final ByteArrayOutputStream out = new ByteArrayOutputStream();
 	//private JsonGenerator gen;
 	private OracleJsonGenerator gen;
