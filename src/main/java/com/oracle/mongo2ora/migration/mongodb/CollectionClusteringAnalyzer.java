@@ -11,6 +11,7 @@ import org.bson.types.ObjectId;
 import java.util.concurrent.CompletableFuture;
 
 // TODO: dychotomic search
+// TODO: see https://github.com/mongodb/mongo-hadoop/blob/master/core/src/main/java/com/mongodb/hadoop/splitter/SampleSplitter.java
 public class CollectionClusteringAnalyzer implements Runnable {
 	public static final Document useIdIndexHint = new Document("_id", 1);
 

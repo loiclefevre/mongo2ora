@@ -779,13 +779,7 @@
 },
 {
   "name":"oracle.jdbc.OraclePreparedStatement",
-  "queryAllDeclaredMethods":true,
-  "queriedMethods":[
-    {"name":"getReturnResultSet","parameterTypes":[] }, 
-    {"name":"registerReturnParameter","parameterTypes":["int","int"] }, 
-    {"name":"setBytesForBlob","parameterTypes":["int","byte[]"] }, 
-    {"name":"setStringForClob","parameterTypes":["int","java.lang.String"] }
-  ]
+  "queryAllDeclaredMethods":true
 },
 {
   "name":"oracle.jdbc.OracleRef",
@@ -813,8 +807,7 @@
 },
 {
   "name":"oracle.jdbc.OracleStatement",
-  "queryAllDeclaredMethods":true,
-  "queriedMethods":[{"name":"setLobPrefetchSize","parameterTypes":["int"] }]
+  "queryAllDeclaredMethods":true
 },
 {
   "name":"oracle.jdbc.OracleStruct",
