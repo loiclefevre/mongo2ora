@@ -256,7 +256,7 @@ public class Main {
 							s.append(" ").append(r.getMetaData().getColumnName(i+1));
 						}
 						LOGGER.warn("Metadata columns: "+s.toString());
-						LOGGER.warn(r.getString("COLUMN_NAME")+": "+r.getString("DATA_TYPE"));
+						LOGGER.warn(r.getString("COLUMN_NAME")+": "+r.getString("DATA_TYPE")+", "+r.getString("TYPE_NAME")+", "+r.getString("SQL_DATA_TYPE")+", "+r.getString("SOURCE_DATA_TYPE"));
 					}
 				}
 			}
