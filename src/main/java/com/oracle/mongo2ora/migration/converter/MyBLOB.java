@@ -27,7 +27,8 @@ public class MyBLOB implements OracleBlob {
 
 	private byte[] data;
 
-	public MyBLOB() {
+	public MyBLOB(final byte[] data) {
+		this.data = data;
 	}
 
 	@Override

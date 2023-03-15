@@ -84,7 +84,7 @@ public class RSIBSON2TextCollectionConverter implements Runnable {
 				long publishStart;
 				long publish = 0;
 
-				final MyBLOB blob = new MyBLOB();
+				//final MyBLOB blob = new MyBLOB();
 				while (cursor.hasNext()) {
 					//out.reset();
 					mongoDBFetchStart = System.nanoTime();
@@ -104,8 +104,8 @@ public class RSIBSON2TextCollectionConverter implements Runnable {
 
 					publishStart = System.nanoTime();
 					//final Timestamp time = new java.sql.Timestamp(System.currentTimeMillis());
-					blob.setBytes(osonData);
-					pushPublisher.accept(new Object[]{decoder.getOid(), /*time, time,*/ "1", blob});
+					//blob.setBytes(osonData);
+					pushPublisher.accept(new Object[]{decoder.getOid(), /*time, time,*/ "1", new MyBLOB(osonData)});
 					publish += (System.nanoTime() - publishStart);
 
 					count++;

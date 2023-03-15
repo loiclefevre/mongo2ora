@@ -413,7 +413,7 @@ public class Main {
 							.password(conf.destinationPassword)
 							.schema(conf.destinationUsername)
 							.executor(rsiWorkerThreadPool)
-							.bufferInterval(Duration.ofMillis(1000L))
+							//.bufferInterval(Duration.ofMillis(1000L))
 							.bufferRows(conf.RSIbufferRows /*49676730*/)
 //                            .averageMessageSize(350)
 //                            .averageMessageSize(32*1024*1024)
