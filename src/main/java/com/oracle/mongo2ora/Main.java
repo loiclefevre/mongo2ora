@@ -24,6 +24,7 @@ import com.oracle.mongo2ora.util.XYTerminalOutput;
 import net.rubygrapefruit.platform.Native;
 import net.rubygrapefruit.platform.terminal.Terminals;
 import oracle.jdbc.internal.OracleConnection;
+import oracle.rsi.ReactiveStreamsIngestion;
 import oracle.ucp.jdbc.PoolDataSource;
 import oracle.ucp.jdbc.PoolDataSourceFactory;
 import org.bson.BsonDocument;
@@ -106,6 +107,9 @@ public class Main {
 	static ExecutorService workerThreadPool;
 	static ExecutorService counterThreadPool;
 
+	static ExecutorService rsiWorkerThreadPool;
+	static ReactiveStreamsIngestion rsi;
+
 	static int MONGODB_COLLECTIONS = 0;
 	static int MONGODB_INDEXES = 0;
 
@@ -145,7 +149,27 @@ public class Main {
 		gui.setDestinationDatabaseName(conf.destinationUsername);
 		gui.start();
 
+		if (conf.useRSI) {
+			LOGGER.info("RSI threads: "+conf.RSIThreads);
+			rsiWorkerThreadPool = Executors.newFixedThreadPool(conf.RSIThreads
+					,
+					new ThreadFactory() {
+						private final AtomicInteger threadNumber = new AtomicInteger(0);
+						private final ThreadGroup group = new ThreadGroup("MongoDBMigration");
 
+						@Override
+						public Thread newThread(Runnable r) {
+							final Thread t = new Thread(group, r,
+									String.valueOf(threadNumber.getAndIncrement()),
+									0);
+							if (t.isDaemon())
+								t.setDaemon(false);
+							if (t.getPriority() != WANTED_THREAD_PRIORITY)
+								t.setPriority(WANTED_THREAD_PRIORITY);
+							return t;
+						}
+					});
+		}
 		// Connect to MongoDB database
 		final MongoCredential credential = MongoCredential.createCredential(conf.sourceUsername, conf.sourceDatabase, conf.sourcePassword.toCharArray());
 
@@ -220,7 +244,7 @@ public class Main {
 				});
 
 		try (MongoClient mongoClient = MongoClients.create(settings)) {
-			final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.cores);
+			final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.useRSI ? conf.RSIThreads : conf.cores);
 			final PoolDataSource adminPDS = initializeConnectionPool(true, conf.destinationConnectionString, conf.destinationAdminUser, conf.destinationAdminPassword, 3);
 			conf.initializeMaxParallelDegree(adminPDS);
 			gui.setPDS(adminPDS);
@@ -364,6 +388,31 @@ public class Main {
 				int i = 0;
 				final List<CollectionCluster> clusters = new ArrayList<>();
 
+				if (conf.useRSI) {
+					rsi = ReactiveStreamsIngestion
+							.builder()
+							.url("jdbc:oracle:thin:@" + conf.destinationConnectionString)
+							.username(conf.destinationUsername)
+							.password(conf.destinationPassword)
+							.schema(conf.destinationUsername)
+							.executor(rsiWorkerThreadPool)
+							.bufferRows(conf.RSIbufferRows /*49676730*/)
+//                            .averageMessageSize(350)
+//                            .averageMessageSize(32*1024*1024)
+							//.bufferInterval(Duration.ofSeconds(20))
+//                            .bufferInterval(Duration.ofSeconds(1L))
+							.table(collectionName)
+							.columns(new String[]{"ID", "VERSION", "JSON_DOCUMENT"})
+							.useDirectPath()
+							.useDirectPathNoLog()
+							.useDirectPathParallel()
+							.useDirectPathSkipIndexMaintenance()
+							.useDirectPathSkipUnusableIndexes()
+//							.useDirectPathStorageInit(String.valueOf(8*1024*1024))
+//							.useDirectPathStorageNext(String.valueOf(8*1024*1024))
+							.build();
+				}
+
 				for (CompletableFuture<CollectionCluster> publishingCf : publishingCfs) {
 					CollectionCluster cc = publishingCf.join();
 					clusters.add(cc);
@@ -374,8 +423,13 @@ public class Main {
 
 						final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
 						publishingCfsConvert.add(pCf);
-						workerThreadPool.execute( AUTONOMOUS_DATABASE ? new DirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize) :
-								new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize) );
+						if (conf.useRSI) {
+/*							workerThreadPool.execute(AUTONOMOUS_DATABASE ? new DirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize) :
+									new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));*/
+						} else {
+							workerThreadPool.execute(AUTONOMOUS_DATABASE ? new DirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize) :
+									new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
+						}
 
 						i++;
 					}
@@ -387,6 +441,10 @@ public class Main {
 				clusters.clear();
 
 				final List<ConversionInformation> informations = publishingCfsConvert.stream().map(CompletableFuture::join).collect(toList());
+
+				if (conf.useRSI) {
+					rsi.close();
+				}
 
 				// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
 				oracleCollectionInfo.finish(mediumPDS, mongoCollection, conf.maxSQLParallelDegree, gui);

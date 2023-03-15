@@ -40,6 +40,10 @@ public class Configuration {
 	public final List<String> selectedCollections = new ArrayList<>();
 	public int maxSQLParallelDegree;
 
+	public int RSIThreads = Math.max(1, (int)(Runtime.getRuntime().availableProcessors() / 3));
+
+	public int RSIbufferRows = 64*1024;
+
 	public static Configuration prepareConfiguration(String[] args) {
 		Configuration conf = new Configuration();
 
@@ -122,6 +126,34 @@ public class Configuration {
 					}
 					else {
 						displayUsage("Expected valid list of collection(s) to migrate parameter: -c <comma-separated list of collection name(s)>");
+					}
+					break;
+
+				case "-r":
+					conf.useRSI = true;
+					break;
+
+				case "-rt":
+					if (i + 1 < args.length) {
+						conf.RSIThreads = Integer.parseInt(args[++i]);
+						if (conf.RSIThreads <= 0) {
+							displayUsage("Expected valid RSI parallel threads parameter: -rt <strictly positive number>");
+						}
+					}
+					else {
+						displayUsage("Expected valid RSI parallel threads parameter: -rt <strictly positive number>");
+					}
+					break;
+
+				case "-rbr":
+					if (i + 1 < args.length) {
+						conf.RSIbufferRows = Integer.parseInt(args[++i]);
+						if (conf.RSIbufferRows <= 0) {
+							displayUsage("Expected valid RSI buffer rows parameter: -rbr <strictly positive number>");
+						}
+					}
+					else {
+						displayUsage("Expected valid RSI buffer rows parameter: -rbr <strictly positive number>");
 					}
 					break;
 

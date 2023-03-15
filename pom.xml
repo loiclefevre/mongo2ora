@@ -136,6 +136,11 @@
             <artifactId>ucp</artifactId>
             <version>${oracle.jdbc.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.oracle.database.jdbc</groupId>
+            <artifactId>rsi</artifactId>
+            <version>${oracle.jdbc.version}</version>
+        </dependency>
         <!-- dependency>
             <groupId>com.oracle.database.ha</groupId>
             <artifactId>ons</artifactId>
