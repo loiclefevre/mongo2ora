@@ -90,8 +90,8 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 					directPathLoadProperties.put("DPPDEF_IN_PARALLEL", "true");
 					directPathLoadProperties.put("DPPDEF_IN_SKIP_UNUSABLE_INDEX", "true");
 					directPathLoadProperties.put("DPPDEF_IN_SKIP_INDEX_MAINT", "true");
-					directPathLoadProperties.put("DPPDEF_IN_STORAGE_INIT", String.valueOf(8 * 1024 * 1024));
-					directPathLoadProperties.put("DPPDEF_IN_STORAGE_NEXT", String.valueOf(8 * 1024 * 1024));
+					//directPathLoadProperties.put("DPPDEF_IN_STORAGE_INIT", String.valueOf(8 * 1024 * 1024));
+					//directPathLoadProperties.put("DPPDEF_IN_STORAGE_NEXT", String.valueOf(8 * 1024 * 1024));
 
 					// Reactive Streaming Ingestion
 
