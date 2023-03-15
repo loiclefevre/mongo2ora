@@ -40,6 +40,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -412,6 +413,7 @@ public class Main {
 							.password(conf.destinationPassword)
 							.schema(conf.destinationUsername)
 							.executor(rsiWorkerThreadPool)
+							.bufferInterval(Duration.ofMillis(1000L))
 							.bufferRows(conf.RSIbufferRows /*49676730*/)
 //                            .averageMessageSize(350)
 //                            .averageMessageSize(32*1024*1024)
