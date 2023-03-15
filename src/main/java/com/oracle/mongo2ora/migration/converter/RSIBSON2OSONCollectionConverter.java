@@ -13,8 +13,6 @@ import oracle.rsi.ReactiveStreamsIngestion;
 import org.bson.MyBSONDecoder;
 import org.bson.RawBsonDocument;
 
-import java.sql.Timestamp;
-import java.sql.Types;
 import java.util.concurrent.CompletableFuture;
 
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
@@ -25,20 +23,20 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 	private final CollectionCluster work;
 	private final CompletableFuture<ConversionInformation> publishingCf;
 
-	private final ReactiveStreamsIngestion rsi;
+	private final MyPushPublisher<Object[]> pushPublisher;
 	private final MongoDatabase database;
 	private final int partitionId;
 	private final ASCIIGUI gui;
 	private final int batchSize;
 	private final String collectionName;
 
-	public RSIBSON2OSONCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, ReactiveStreamsIngestion rsi, ASCIIGUI gui, int batchSize) {
+	public RSIBSON2OSONCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, MyPushPublisher<Object[]> pushPublisher, ASCIIGUI gui, int batchSize) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
 		this.work = work;
 		this.publishingCf = publishingCf;
 		this.database = database;
-		this.rsi = rsi;
+		this.pushPublisher = pushPublisher;
 		this.gui = gui;
 		this.batchSize = batchSize;
 	}
@@ -68,8 +66,6 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 				final MyBSONDecoder decoder = new MyBSONDecoder(true);
 
 				//final PushPublisher<Object[]> pushPublisher = ReactiveStreamsIngestion.pushPublisher();
-				final MyPushPublisher<Object[]> pushPublisher = new MyPushPublisher<>();
-				pushPublisher.subscribe(rsi.subscriber());
 
 				LOGGER.warn("Starting...");
 

@@ -14,6 +14,7 @@ import com.oracle.mongo2ora.migration.Configuration;
 import com.oracle.mongo2ora.migration.ConversionInformation;
 import com.oracle.mongo2ora.migration.converter.BSON2TextCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.DirectPathBSON2OSONCollectionConverter;
+import com.oracle.mongo2ora.migration.converter.MyPushPublisher;
 import com.oracle.mongo2ora.migration.converter.RSIBSON2OSONCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.RSIBSON2TextCollectionConverter;
 import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
@@ -405,6 +406,7 @@ public class Main {
 				int i = 0;
 				final List<CollectionCluster> clusters = new ArrayList<>();
 
+				final MyPushPublisher<Object[]> pushPublisher = new MyPushPublisher<>();
 				if (conf.useRSI) {
 					rsi = ReactiveStreamsIngestion
 							.builder()
@@ -429,6 +431,8 @@ public class Main {
 //							.useDirectPathStorageInit(String.valueOf(8*1024*1024))
 //							.useDirectPathStorageNext(String.valueOf(8*1024*1024))
 							.build();
+
+					pushPublisher.subscribe(rsi.subscriber());
 				}
 
 				for (CompletableFuture<CollectionCluster> publishingCf : publishingCfs) {
@@ -442,8 +446,8 @@ public class Main {
 						final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
 						publishingCfsConvert.add(pCf);
 						if (conf.useRSI) {
-							workerThreadPool.execute(AUTONOMOUS_DATABASE ? new RSIBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize) :
-									new RSIBSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize));
+							workerThreadPool.execute(AUTONOMOUS_DATABASE ? new RSIBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pushPublisher, gui, conf.batchSize) :
+									new RSIBSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pushPublisher, gui, conf.batchSize));
 						} else {
 							workerThreadPool.execute(AUTONOMOUS_DATABASE ? new DirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize) :
 									new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
