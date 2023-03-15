@@ -404,7 +404,7 @@ public class Main {
 							//.bufferInterval(Duration.ofSeconds(20))
 //                            .bufferInterval(Duration.ofSeconds(1L))
 							.table(collectionName)
-							.columns(new String[]{"ID", "VERSION", "JSON_DOCUMENT"})
+							.columns(new String[]{"ID", "CREATED_ON", "LAST_MODIFIED", "VERSION", "JSON_DOCUMENT"})
 							.useDirectPath()
 							.useDirectPathNoLog()
 							.useDirectPathParallel()
