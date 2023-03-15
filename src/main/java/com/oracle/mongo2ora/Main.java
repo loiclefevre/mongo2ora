@@ -248,7 +248,7 @@ public class Main {
 				});
 
 		try (MongoClient mongoClient = MongoClients.create(settings)) {
-			final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.useRSI ? conf.RSIThreads : conf.cores);
+			final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.useRSI ? 3 : conf.cores);
 
 			/*try (Connection c = pds.getConnection()) {
 				try( ResultSet r = c.getMetaData().getColumns(null, null, "MOVIES", null)) {
