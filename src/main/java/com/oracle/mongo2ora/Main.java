@@ -248,7 +248,7 @@ public class Main {
 		try (MongoClient mongoClient = MongoClients.create(settings)) {
 			final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.useRSI ? conf.RSIThreads : conf.cores);
 
-			try (Connection c = pds.getConnection()) {
+			/*try (Connection c = pds.getConnection()) {
 				try( ResultSet r = c.getMetaData().getColumns(null, null, "MOVIES", null)) {
 					while(r.next()) {
 						StringBuilder s = new StringBuilder();
@@ -259,7 +259,7 @@ public class Main {
 						LOGGER.warn(r.getString("COLUMN_NAME")+": "+r.getString("DATA_TYPE")+", "+r.getString("TYPE_NAME")+", "+r.getString("SQL_DATA_TYPE")+", "+r.getString("SOURCE_DATA_TYPE"));
 					}
 				}
-			}
+			}*/
 
 			final PoolDataSource adminPDS = initializeConnectionPool(true, conf.destinationConnectionString, conf.destinationAdminUser, conf.destinationAdminPassword, 3);
 			conf.initializeMaxParallelDegree(adminPDS);
