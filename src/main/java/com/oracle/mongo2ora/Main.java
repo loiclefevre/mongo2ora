@@ -522,7 +522,7 @@ public class Main {
 		pds.setMaxStatements(20);
 		pds.setMaxConnectionReuseTime(900);
 		pds.setMaxConnectionReuseCount(5000);
-		pds.setSecondsToTrustIdleConnection(1);
+		//pds.setSecondsToTrustIdleConnection(1);
 		pds.setConnectionProperty(OracleConnection.CONNECTION_PROPERTY_DEFAULT_ROW_PREFETCH, "20");
 		pds.setConnectionProperty("oracle.jdbc.bindUseDBA", "true");
 		pds.setConnectionProperty("oracle.jdbc.thinForceDNSLoadBalancing", "true");
