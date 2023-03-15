@@ -310,7 +310,7 @@ public class ASCIIGUI extends TimerTask {
 	}
 
 	public void start() {
-		timer.scheduleAtFixedRate(this, 0, 1000);
+		timer.scheduleAtFixedRate(this, 0, 2000);
 	}
 
 	public void stop() {
