@@ -302,6 +302,7 @@ public class ASCIIGUI extends TimerTask {
 				}
 			}
 			catch (SQLException ignored) {
+				LOGGER.error("Updating counters",ignored);
 			}
 		}
 
