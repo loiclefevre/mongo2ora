@@ -148,12 +148,12 @@ public class Configuration {
 				case "-rbr":
 					if (i + 1 < args.length) {
 						conf.RSIbufferRows = Integer.parseInt(args[++i]);
-						if (conf.RSIbufferRows <= 0) {
-							displayUsage("Expected valid RSI buffer rows parameter: -rbr <strictly positive number>");
+						if (conf.RSIbufferRows < 0) {
+							displayUsage("Expected valid RSI buffer rows parameter: -rbr <positive number, even 0 for auto-configuration>");
 						}
 					}
 					else {
-						displayUsage("Expected valid RSI buffer rows parameter: -rbr <strictly positive number>");
+						displayUsage("Expected valid RSI buffer rows parameter: -rbr <positive number, even 0 for auto-configuration>");
 					}
 					break;
 
