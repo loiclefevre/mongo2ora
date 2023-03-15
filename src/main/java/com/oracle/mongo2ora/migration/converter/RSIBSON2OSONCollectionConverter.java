@@ -12,9 +12,11 @@ import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
 import oracle.rsi.PushPublisher;
 import oracle.rsi.RSIException;
 import oracle.rsi.ReactiveStreamsIngestion;
+import oracle.sql.RAW;
 import org.bson.MyBSONDecoder;
 import org.bson.RawBsonDocument;
 
+import java.sql.Blob;
 import java.sql.Timestamp;
 import java.util.concurrent.CompletableFuture;
 
@@ -68,7 +70,8 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 
 				final MyBSONDecoder decoder = new MyBSONDecoder(true);
 
-				final PushPublisher<Object[]> pushPublisher = ReactiveStreamsIngestion.pushPublisher();
+				//final PushPublisher<Object[]> pushPublisher = ReactiveStreamsIngestion.pushPublisher();
+				final MyPushPublisher<Object[]> pushPublisher = new MyPushPublisher<>();
 				pushPublisher.subscribe(rsi.subscriber());
 
 				long memPressureCount = 0;
@@ -99,7 +102,6 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 					final byte[] osonData = decoder.getOSONData();
 					serializeOSON += (System.nanoTime() - serializeOSONStart);
 
-
 					publishStart = System.nanoTime();
 					final Timestamp time = new java.sql.Timestamp(System.currentTimeMillis());
 					while (true) {
@@ -125,6 +127,7 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 					osonLength += osonData.length;
 				}
 
+				pushPublisher.close();
 
 				LOGGER.info("count=" + count + ", mongoDBFetch=" + mongoDBFetch + ", bsonConvert=" + bsonConvert + ", serializeOSON=" + serializeOSON + ", publish=" + publish);
 

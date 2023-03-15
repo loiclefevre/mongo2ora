@@ -69,7 +69,8 @@ public class RSIBSON2TextCollectionConverter implements Runnable {
 
 				final MyBSONDecoder decoder = new MyBSONDecoder(true);
 
-				final PushPublisher<Object[]> pushPublisher = ReactiveStreamsIngestion.pushPublisher();
+				//final PushPublisher<Object[]> pushPublisher = ReactiveStreamsIngestion.pushPublisher();
+				final MyPushPublisher<Object[]> pushPublisher = new MyPushPublisher<>();
 				pushPublisher.subscribe(rsi.subscriber());
 
 				long memPressureCount = 0;
@@ -126,6 +127,7 @@ public class RSIBSON2TextCollectionConverter implements Runnable {
 					osonLength += osonData.length;
 				}
 
+				pushPublisher.close();
 
 				LOGGER.info("count=" + count + ", mongoDBFetch=" + mongoDBFetch + ", bsonConvert=" + bsonConvert + ", serializeOSON=" + serializeOSON + ", publish=" + publish);
 
