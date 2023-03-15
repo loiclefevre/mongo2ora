@@ -217,9 +217,9 @@ public class OracleCollectionInfo {
 					if (autonomousDatabase && "UNUSABLE".equalsIgnoreCase(currentPKIndexStatus)) {
 
 
-						LOGGER.info("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-						s.execute("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-						LOGGER.info("Rebuild PK index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+						LOGGER.info("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + (2 * maxParallelDegree)));
+						s.execute("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + (2 * maxParallelDegree)));
+						LOGGER.info("Rebuild PK index with parallel degree of " + (2 * maxParallelDegree) + " in " + getDurationSince(start));
 					}
 					else {
 						LOGGER.info("PK Index status is: " + currentPKIndexStatus);
