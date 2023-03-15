@@ -14,8 +14,8 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <main.class>com.oracle.mongo2ora.Main</main.class>
-        <graalvm.version>22.1.0</graalvm.version>
-        <oracle.jdbc.version>21.6.0.0.1</oracle.jdbc.version>
+        <graalvm.version>22.3.1</graalvm.version>
+        <oracle.jdbc.version>21.9.0.0</oracle.jdbc.version>
 
         <targetJavaVersion>17</targetJavaVersion>
         <maven.compiler.source>${targetJavaVersion}</maven.compiler.source>
@@ -34,10 +34,10 @@
             <artifactId>slf4j-log4j12</artifactId>
             <version>1.7.36</version>
         </dependency>
-        <dependency>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
-            <version>1.2.17</version>
+	<dependency>
+	    <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.20.0</version>
         </dependency>
         <dependency>
             <groupId>net.rubygrapefruit</groupId>
@@ -204,7 +204,12 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.8.1</version>
+		<version>3.10.1</version>
+		<configuration>
+                    <source>19</source>
+                    <target>19</target>
+                    <compilerArgument>--enable-preview</compilerArgument>
+                </configuration>
             </plugin>
             <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
@@ -232,7 +237,7 @@
             <plugin>
                 <groupId>org.graalvm.buildtools</groupId>
                 <artifactId>native-maven-plugin</artifactId>
-                <version>0.9.12</version> <!-- see: https://graalvm.github.io/native-build-tools/latest/index.html -->
+                <version>0.9.20</version> <!-- see: https://graalvm.github.io/native-build-tools/latest/index.html -->
                 <extensions>true</extensions>
                 <executions>
                     <execution>
@@ -260,6 +265,7 @@
                     <useArgFile>false</useArgFile>
                     <buildArgs>
                         <buildArg>--no-fallback</buildArg>
+                        <buildArg>--enable-preview</buildArg>
                         <buildArg>-H:+ReportExceptionStackTraces</buildArg>
                         <buildArg>-H:+AddAllCharsets</buildArg>
                         <buildArg>-Doracle.jdbc.fanEnabled=false</buildArg>
@@ -274,10 +280,17 @@
                         <buildArg>-H:G1HeapRegionSize=32M</buildArg>
                         <buildArg>-H:-UseCompressedReferences</buildArg>
                         <buildArg>-H:+NativeArchitecture</buildArg>
+                        <buildArg>-H:+OptStringConcat</buildArg>
+                        <buildArg>-H:-OutlineStringBuilderAppends</buildArg>
+			
+			<!-- Perf debug -->
+			<!-- buildArg>-H:-DeleteLocalSymbols</buildArg>
+			<buildArg>-H:Debug=1</buildArg -->
 
                         <!-- Profile Guided Optimization, GraalVM EE only -->
                         <!-- buildArg>- -pgo-instrument</buildArg -->
-                        <!-- buildArg>- -pgo=../pgo_3_nativearchitecture.iprof</buildArg -->
+			<!-- buildArg>- -pgo=../3newintrinsicsprofile.iprof</buildArg -->
+			<buildArg>--pgo=${project.basedir}/profile-22.3.0.iprof</buildArg>
 
                         <!-- buildArg>-XX:+UnlockExperimentalVMOptions</buildArg>
                         <buildArg>-XX:G1MaxNewSizePercent=80</buildArg -->
