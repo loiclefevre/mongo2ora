@@ -14,6 +14,7 @@ import org.bson.MyBSONDecoder;
 import org.bson.RawBsonDocument;
 
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.concurrent.CompletableFuture;
 
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
@@ -101,8 +102,8 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 					serializeOSON += (System.nanoTime() - serializeOSONStart);
 
 					publishStart = System.nanoTime();
-					final Timestamp time = new java.sql.Timestamp(System.currentTimeMillis());
-					pushPublisher.accept(new Object[]{decoder.getOid(), time, time, "1", new MyBLOB(osonData)});
+					//final Timestamp time = new java.sql.Timestamp(System.currentTimeMillis());
+					pushPublisher.accept(new Object[]{decoder.getOid(), /*time, time,*/ "1", new MyBLOB(osonData)});
 					publish += (System.nanoTime() - publishStart);
 
 					count++;

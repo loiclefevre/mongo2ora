@@ -247,6 +247,20 @@ public class Main {
 
 		try (MongoClient mongoClient = MongoClients.create(settings)) {
 			final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.useRSI ? conf.RSIThreads : conf.cores);
+
+			try (Connection c = pds.getConnection()) {
+				try( ResultSet r = c.getMetaData().getColumns(null, null, "MOVIES", null)) {
+					while(r.next()) {
+						StringBuilder s = new StringBuilder();
+						for(int i = 0; i < r.getMetaData().getColumnCount(); i++){
+							s.append(" ").append(r.getMetaData().getColumnName(i+1));
+						}
+						LOGGER.warn("Metadata columns: "+s.toString());
+						LOGGER.warn(r.getString("COLUMN_NAME")+": "+r.getString("DATA_TYPE"));
+					}
+				}
+			}
+
 			final PoolDataSource adminPDS = initializeConnectionPool(true, conf.destinationConnectionString, conf.destinationAdminUser, conf.destinationAdminPassword, 3);
 			conf.initializeMaxParallelDegree(adminPDS);
 			gui.setPDS(adminPDS);
@@ -404,7 +418,7 @@ public class Main {
 							//.bufferInterval(Duration.ofSeconds(20))
 //                            .bufferInterval(Duration.ofSeconds(1L))
 							.table(collectionName)
-							.columns(new String[]{"ID", "CREATED_ON", "LAST_MODIFIED", "VERSION", "JSON_DOCUMENT"})
+							.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", "JSON_DOCUMENT"})
 							.useDirectPath()
 							.useDirectPathNoLog()
 							.useDirectPathParallel()

@@ -103,8 +103,8 @@ public class RSIBSON2TextCollectionConverter implements Runnable {
 					serializeOSON += (System.nanoTime() - serializeOSONStart);
 
 					publishStart = System.nanoTime();
-					final Timestamp time = new java.sql.Timestamp(System.currentTimeMillis());
-					pushPublisher.accept(new Object[]{decoder.getOid(), time, time, "1", new MyBLOB(osonData)});
+					//final Timestamp time = new java.sql.Timestamp(System.currentTimeMillis());
+					pushPublisher.accept(new Object[]{decoder.getOid(), /*time, time,*/ "1", new MyBLOB(osonData)});
 					publish += (System.nanoTime() - publishStart);
 
 					count++;
