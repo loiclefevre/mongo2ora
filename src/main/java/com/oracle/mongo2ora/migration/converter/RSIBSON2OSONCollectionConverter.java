@@ -9,14 +9,10 @@ import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.ConversionInformation;
 import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
-import oracle.rsi.PushPublisher;
-import oracle.rsi.RSIException;
 import oracle.rsi.ReactiveStreamsIngestion;
-import oracle.sql.RAW;
 import org.bson.MyBSONDecoder;
 import org.bson.RawBsonDocument;
 
-import java.sql.Blob;
 import java.sql.Timestamp;
 import java.util.concurrent.CompletableFuture;
 
@@ -73,6 +69,8 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 				//final PushPublisher<Object[]> pushPublisher = ReactiveStreamsIngestion.pushPublisher();
 				final MyPushPublisher<Object[]> pushPublisher = new MyPushPublisher<>();
 				pushPublisher.subscribe(rsi.subscriber());
+
+				LOGGER.warn("Starting...");
 
 				long memPressureCount = 0;
 
