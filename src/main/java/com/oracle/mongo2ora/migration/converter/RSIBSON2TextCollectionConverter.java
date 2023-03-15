@@ -104,26 +104,10 @@ public class RSIBSON2TextCollectionConverter implements Runnable {
 
 					publishStart = System.nanoTime();
 					final Timestamp time = new java.sql.Timestamp(System.currentTimeMillis());
-					while (true) {
-						try {
-							pushPublisher.accept(new Object[]{decoder.getOid(), time,time, "1", osonData});
-							break;
-						}
-						catch (RSIException r) {
-							if ("Notifying memory pressure.".equals(r.getMessage())) {
-								//try {
-								memPressureCount++;
-
-								if (memPressureCount % 1000 == 0) {
-									LOGGER.warn(threadId + " mem pressure count=" + memPressureCount);
-								}
-								//Thread.sleep(1L);
-								//} catch (InterruptedException ignored) {}
-							}
-						}
-					}
+					pushPublisher.accept(new Object[]{decoder.getOid(), time, time, "1", new MyBLOB(osonData)});
 					publish += (System.nanoTime() - publishStart);
 
+					count++;
 					osonLength += osonData.length;
 				}
 
