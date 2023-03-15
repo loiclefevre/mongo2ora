@@ -465,6 +465,7 @@ public class Main {
 				final List<ConversionInformation> informations = publishingCfsConvert.stream().map(CompletableFuture::join).collect(toList());
 
 				if (conf.useRSI) {
+					pushPublisher.close();
 					rsi.close();
 				}
 

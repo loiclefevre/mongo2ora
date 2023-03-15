@@ -107,8 +107,6 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 					osonLength += osonData.length;
 				}
 
-				pushPublisher.close();
-
 				LOGGER.info("count=" + count + ", mongoDBFetch=" + mongoDBFetch + ", bsonConvert=" + bsonConvert + ", serializeOSON=" + serializeOSON + ", publish=" + publish);
 
 				//final long duration = System.currentTimeMillis() - start;
