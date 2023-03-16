@@ -530,6 +530,7 @@ public class Main {
 		//pds.setConnectionValidationTimeout();
 		//pds.setSecondsToTrustIdleConnection(1);
 		pds.setConnectionProperty(OracleConnection.CONNECTION_PROPERTY_DEFAULT_ROW_PREFETCH, "20");
+		pds.setConnectionProperty("tcp.nodelay", "yes");
 		pds.setConnectionProperty("oracle.jdbc.bindUseDBA", "true");
 		pds.setConnectionProperty("oracle.jdbc.thinForceDNSLoadBalancing", "true");
 
