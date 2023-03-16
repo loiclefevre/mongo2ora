@@ -14,6 +14,7 @@ import com.oracle.mongo2ora.migration.Configuration;
 import com.oracle.mongo2ora.migration.ConversionInformation;
 import com.oracle.mongo2ora.migration.converter.BSON2TextCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.DirectPathBSON2OSONCollectionConverter;
+import com.oracle.mongo2ora.migration.converter.MemoptimizeForWriteBSON2OSONCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.MyPushPublisher;
 import com.oracle.mongo2ora.migration.converter.RSIBSON2OSONCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.RSIBSON2TextCollectionConverter;
@@ -300,6 +301,10 @@ public class Main {
 				sqle.printStackTrace();
 			}
 
+			if(conf.useMemoptimizeForWrite && !AUTONOMOUS_DATABASE) {
+				throw new RuntimeException("Can't use memoptimize for write if target is not an autonomous database!");
+			}
+
 			MongoDatabase mongoDatabase = mongoClient.getDatabase(conf.sourceDatabase);
 			final Document result = mongoDatabase.runCommand(new Document("buildInfo", 1));
 			gui.setsourceDatabaseVersion((String) result.get("version"));
@@ -340,7 +345,7 @@ public class Main {
 				final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collectionName);
 
 				// disable is JSON constraint, remove indexes...
-				final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, mongoCollection, AUTONOMOUS_DATABASE);
+				final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, mongoCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite);
 
 				if (!oracleCollectionInfo.emptyDestinationCollection) {
 					//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -445,7 +450,11 @@ public class Main {
 						if (conf.useRSI) {
 							workerThreadPool.execute(AUTONOMOUS_DATABASE ? new RSIBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize) :
 									new RSIBSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize));
-						} else {
+						}
+						else if(conf.useMemoptimizeForWrite) {
+							workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
+						}
+						else {
 							workerThreadPool.execute(AUTONOMOUS_DATABASE ? new DirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize) :
 									new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 						}

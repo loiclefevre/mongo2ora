@@ -65,6 +65,7 @@ public class MyPushPublisher<T> implements oracle.rsi.PushPublisher<T> {
 		for(Object[] row : rows)
 		this.rsiSubscriber.onNext(row);
 
+
 //		this.request.decrementAndGet();
 	}
 

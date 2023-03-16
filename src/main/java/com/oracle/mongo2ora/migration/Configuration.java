@@ -14,6 +14,7 @@ import java.util.List;
 
 public class Configuration {
 	public boolean useRSI;
+	public boolean useMemoptimizeForWrite;
 	public boolean dropAlreadyExistingCollection;
 	public String source;
 	public String destination;
@@ -155,6 +156,10 @@ public class Configuration {
 					else {
 						displayUsage("Expected valid RSI buffer rows parameter: -rbr <positive number, even 0 for auto-configuration>");
 					}
+					break;
+
+				case "-m":
+					conf.useMemoptimizeForWrite = true;
 					break;
 
 				case "--drop":

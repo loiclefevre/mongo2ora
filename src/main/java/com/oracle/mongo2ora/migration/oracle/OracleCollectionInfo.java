@@ -47,7 +47,8 @@ public class OracleCollectionInfo {
 	}
 
 
-	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection, MongoCollection<Document> mongoCollection, boolean autonomousDatabase) throws SQLException, OracleException {
+	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection, MongoCollection<Document> mongoCollection,
+																	 boolean autonomousDatabase, boolean useMemoptimizeForWrite) throws SQLException, OracleException {
 		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName, autonomousDatabase);
 
 		try (Connection c = adminPDS.getConnection()) {
@@ -75,6 +76,9 @@ public class OracleCollectionInfo {
 					if (sodaCollection == null) {
 						throw new IllegalStateException("Can't create SODA collection: " + collectionName);
 					}
+					if(useMemoptimizeForWrite) {
+						configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName);
+					}
 				}
 				else {
 					try (Statement s = userConnection.createStatement()) {
@@ -88,6 +92,9 @@ public class OracleCollectionInfo {
 									sodaCollection = db.admin().createCollection(collectionName);
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create SODA collection: " + collectionName);
+									}
+									if(useMemoptimizeForWrite) {
+										configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName);
 									}
 								}
 								else {
@@ -104,6 +111,9 @@ public class OracleCollectionInfo {
 									sodaCollection = db.admin().createCollection(collectionName);
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create SODA collection: " + collectionName);
+									}
+									if(useMemoptimizeForWrite) {
+										configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName);
 									}
 								}
 							}
@@ -171,6 +181,26 @@ public class OracleCollectionInfo {
 		}
 
 		return ret;
+	}
+
+	private static void configureSODACollectionForMemoptimizeForWrite(Connection userConnection, String collectionName) throws SQLException {
+		try (PreparedStatement p = userConnection.prepareStatement("insert into "+collectionName+"(ID,VERSION,JSON_DOCUMENT) values (?,?,?)")) {
+			p.setString(1,"dummy");
+			p.setString(2,"dummy");
+			p.setString(3,"{}");
+			p.executeUpdate();
+			userConnection.commit();
+		}
+
+		try (PreparedStatement p = userConnection.prepareStatement("delete from "+collectionName+" where id=?")) {
+			p.setString(1,"dummy");
+			p.executeUpdate();
+			userConnection.commit();
+		}
+
+		try (Statement s = userConnection.createStatement()) {
+			s.execute("alter table "+collectionName+" memoptimize for write");
+		}
 	}
 
 	/**
