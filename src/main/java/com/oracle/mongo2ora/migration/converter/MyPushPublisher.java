@@ -10,7 +10,7 @@ public class MyPushPublisher<T> implements oracle.rsi.PushPublisher<T> {
 
 	private boolean isClosed = false;
 	private Flow.Subscriber<? super T> rsiSubscriber;
-	private final AtomicLong request = new AtomicLong(0L);
+//	private final AtomicLong request = new AtomicLong(0L);
 
 	public MyPushPublisher() {
 	}
@@ -31,7 +31,7 @@ public class MyPushPublisher<T> implements oracle.rsi.PushPublisher<T> {
 		if (this.isClosed) {
 			throw new RSIException("Cannot accept. Publisher is closed.");
 		}
-		int times = 0;
+/*		int times = 0;
 		long value;
 		do {
 			value = this.request.get();
@@ -58,13 +58,10 @@ public class MyPushPublisher<T> implements oracle.rsi.PushPublisher<T> {
 			}
 		}
 		while (value == 0L);
-/*		if ( == 0L) {
-			throw new RSIException("Notifying memory pressure.");
-		}
-		else { */
+*/
 		this.rsiSubscriber.onNext(object);
-		this.request.decrementAndGet();
-//		}
+
+//		this.request.decrementAndGet();
 	}
 
 	public void close() throws Exception {
@@ -83,7 +80,7 @@ public class MyPushPublisher<T> implements oracle.rsi.PushPublisher<T> {
 					MyPushPublisher.this.rsiSubscriber.onError(new IllegalArgumentException("Non-positive request signals are illegal."));
 				}
 
-				MyPushPublisher.this.request.addAndGet(var1);
+//				MyPushPublisher.this.request.addAndGet(var1);
 			}
 		}
 
