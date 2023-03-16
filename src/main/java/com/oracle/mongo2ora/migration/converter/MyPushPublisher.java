@@ -28,7 +28,7 @@ public class MyPushPublisher<T> implements oracle.rsi.PushPublisher<T> {
 		}
 	}
 
-	public synchronized void accept(T object) {
+	public /*synchronized*/ void accept(T object) {
 		if (this.isClosed) {
 			throw new RSIException("Cannot accept. Publisher is closed.");
 		}
