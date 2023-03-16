@@ -25,20 +25,20 @@ public class RSIBSON2TextCollectionConverter implements Runnable {
 	private final CollectionCluster work;
 	private final CompletableFuture<ConversionInformation> publishingCf;
 
-	private final MyPushPublisher<List<Object[]>> pushPublisher;
+	private final ReactiveStreamsIngestion rsi;
 	private final MongoDatabase database;
 	private final int partitionId;
 	private final ASCIIGUI gui;
 	private final int batchSize;
 	private final String collectionName;
 
-	public RSIBSON2TextCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, MyPushPublisher<List<Object[]>> pushPublisher, ASCIIGUI gui, int batchSize) {
+	public RSIBSON2TextCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, ReactiveStreamsIngestion rsi, ASCIIGUI gui, int batchSize) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
 		this.work = work;
 		this.publishingCf = publishingCf;
 		this.database = database;
-		this.pushPublisher = pushPublisher;
+		this.rsi = rsi;
 		this.gui = gui;
 		this.batchSize = batchSize;
 	}
@@ -80,6 +80,9 @@ public class RSIBSON2TextCollectionConverter implements Runnable {
 				long publishStart;
 				long publish = 0;
 
+				final MyPushPublisher<List<Object[]>> pushPublisher = new MyPushPublisher<>();
+				pushPublisher.subscribe(rsi.subscriber());
+
 				//final MyBLOB blob = new MyBLOB();
 				while (cursor.hasNext()) {
 					//out.reset();
@@ -107,6 +110,8 @@ public class RSIBSON2TextCollectionConverter implements Runnable {
 					count++;
 					osonLength += osonData.length;
 				}
+
+				pushPublisher.close();
 
 				LOGGER.info("count=" + count + ", mongoDBFetch=" + mongoDBFetch + ", bsonConvert=" + bsonConvert + ", serializeOSON=" + serializeOSON + ", publish=" + publish);
 
