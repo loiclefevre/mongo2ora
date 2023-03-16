@@ -169,7 +169,7 @@ public class MemoptimizeForWriteBSON2OSONCollectionConverter implements Runnable
 							//jdbcBatchExecute += (System.nanoTime() - jdbcBatchExecuteStart);
 						}
 
-						//realConnection.commit(commitOptions);
+						realConnection.commit(commitOptions);
 
 						//LOGGER.info("count=" + count + ", mongoDBFetch=" + mongoDBFetch + ", bsonConvert=" + bsonConvert + ", serializeOSON=" + serializeOSON + ", addBatch=" + addBatch + ", jdbcBatchExecute=" + jdbcBatchExecute);
 
