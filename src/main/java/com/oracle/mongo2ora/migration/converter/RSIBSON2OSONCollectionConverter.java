@@ -110,7 +110,7 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 					//blob.setBytes(osonData);
 					batchSizeCounter++;
 
-					rows.add(new Object[]{decoder.getOid(), /*time, time,*/ "1", new MyBLOB(osonData)});
+					rows.add(new Object[]{decoder.getOid(), /*time, time,*/ "1", /*new MyBLOB(*/osonData/*)*/});
 
 					if (batchSizeCounter >= batchSize) {
 						count += batchSizeCounter;
