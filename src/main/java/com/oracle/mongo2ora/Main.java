@@ -421,7 +421,7 @@ public class Main {
 							.executor(rsiWorkerThreadPool)
 							//.bufferInterval(Duration.ofMillis(1000L))
 							.bufferRows(conf.RSIbufferRows /*49676730*/)
-							.rowsPerBatch(conf.RSIbufferRows)
+							.rowsPerBatch(conf.batchSize)
 //                            .averageMessageSize(32*1024*1024)
 							//.bufferInterval(Duration.ofSeconds(20))
 //                            .bufferInterval(Duration.ofSeconds(1L))
