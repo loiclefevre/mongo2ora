@@ -30,13 +30,18 @@ public class MyPushPublisher<T> implements oracle.rsi.PushPublisher<T> {
 		if (this.isClosed) {
 			throw new RSIException("Cannot accept. Publisher is closed.");
 		}
-		/*else if (this.request.get() == 0L) {
+		long value;
+		do {
+			value = this.request.get();
+			if(value == 0L) Thread.yield();
+		} while(value == 0L);
+/*		if ( == 0L) {
 			throw new RSIException("Notifying memory pressure.");
-		}*/
-		else {
+		}
+		else { */
 			this.rsiSubscriber.onNext(object);
 			this.request.decrementAndGet();
-		}
+//		}
 	}
 
 	public void close() throws Exception {

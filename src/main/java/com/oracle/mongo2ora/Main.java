@@ -125,7 +125,7 @@ public class Main {
 	public static void main(final String[] args) {
 		// For Autonomous Database CMAN load balancing
 		Security.setProperty("networkaddress.cache.ttl", "0");
-		Security.setProperty("oracle.jdbc.fanEnabled", "false");
+		System.setProperty("oracle.jdbc.fanEnabled", "false");
 
 		Locale.setDefault(Locale.US);
 
@@ -516,12 +516,13 @@ public class Main {
 		pds.setInitialPoolSize(cores);
 		pds.setMinPoolSize(cores);
 		pds.setMaxPoolSize(cores);
-		pds.setTimeoutCheckInterval(120);
-		pds.setInactiveConnectionTimeout(120);
+		pds.setTimeoutCheckInterval(4*120);
+		pds.setInactiveConnectionTimeout(4*120);
 		pds.setValidateConnectionOnBorrow(!admin);
 		pds.setMaxStatements(20);
-		pds.setMaxConnectionReuseTime(900);
-		pds.setMaxConnectionReuseCount(5000);
+		//pds.setMaxConnectionReuseTime(900);
+		//pds.setMaxConnectionReuseCount(5000);
+		//pds.setConnectionValidationTimeout();
 		//pds.setSecondsToTrustIdleConnection(1);
 		pds.setConnectionProperty(OracleConnection.CONNECTION_PROPERTY_DEFAULT_ROW_PREFETCH, "20");
 		pds.setConnectionProperty("oracle.jdbc.bindUseDBA", "true");
