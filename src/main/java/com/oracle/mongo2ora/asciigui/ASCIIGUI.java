@@ -278,11 +278,12 @@ public class ASCIIGUI extends TimerTask {
 		if (getPds() != null) {
 			try (Connection c = getPds().getConnection()) {
 				try (PreparedStatement p = c.prepareStatement(
-						"SELECT current_timestamp, sum(VALUE), ((sum(VALUE)-?)/(1024*1024))/extract(day from (current_timestamp-?)*86400) \n" +
+						"SELECT current_timestamp, sum(VALUE), ((sum(VALUE)-?)/(1024*1024))/(extract(minute from (current_timestamp-?)*60 +extract(second from (current_timestamp-?))) \n" +
 						"FROM gv$sysstat WHERE NAME = 'bytes received via SQL*Net from client'")) {
 
 					p.setLong(1,prevBytesReceivedFromClient);
 					p.setTimestamp(2,prevTimestamp);
+					p.setTimestamp(3,prevTimestamp);
 
 					try (ResultSet r = p.executeQuery()) {
 						if (r.next()) {
