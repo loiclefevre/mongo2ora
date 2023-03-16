@@ -13,6 +13,8 @@ import oracle.rsi.ReactiveStreamsIngestion;
 import org.bson.MyBSONDecoder;
 import org.bson.RawBsonDocument;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
@@ -23,14 +25,14 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 	private final CollectionCluster work;
 	private final CompletableFuture<ConversionInformation> publishingCf;
 
-	private final MyPushPublisher<Object[]> pushPublisher;
+	private final MyPushPublisher<List<Object[]>> pushPublisher;
 	private final MongoDatabase database;
 	private final int partitionId;
 	private final ASCIIGUI gui;
 	private final int batchSize;
 	private final String collectionName;
 
-	public RSIBSON2OSONCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, MyPushPublisher<Object[]> pushPublisher, ASCIIGUI gui, int batchSize) {
+	public RSIBSON2OSONCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, MyPushPublisher<List<Object[]>> pushPublisher, ASCIIGUI gui, int batchSize) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
 		this.work = work;
@@ -80,7 +82,10 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 				long publishStart;
 				long publish = 0;
 
+				int batchSizeCounter = 0;
+
 				//final MyBLOB blob = new MyBLOB();
+				final List<Object[]> rows = new ArrayList<>();
 				while (cursor.hasNext()) {
 					//out.reset();
 					mongoDBFetchStart = System.nanoTime();
@@ -100,11 +105,27 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 					publishStart = System.nanoTime();
 					//final Timestamp time = new java.sql.Timestamp(System.currentTimeMillis());
 					//blob.setBytes(osonData);
-					pushPublisher.accept(new Object[]{decoder.getOid(), /*time, time,*/ "1", new MyBLOB(osonData)});
+					batchSizeCounter++;
+
+					rows.add(new Object[]{decoder.getOid(), /*time, time,*/ "1", new MyBLOB(osonData)});
+
+					if (batchSizeCounter >= batchSize) {
+						count += batchSizeCounter;
+						pushPublisher.accept(rows);
+						rows.clear();
+						batchSizeCounter = 0;
+					}
+
 					publish += (System.nanoTime() - publishStart);
 
-					count++;
 					osonLength += osonData.length;
+				}
+
+				if (batchSizeCounter >= batchSize) {
+					count += batchSizeCounter;
+					pushPublisher.accept(rows);
+					rows.clear();
+					batchSizeCounter = 0;
 				}
 
 				LOGGER.info("count=" + count + ", mongoDBFetch=" + mongoDBFetch + ", bsonConvert=" + bsonConvert + ", serializeOSON=" + serializeOSON + ", publish=" + publish);

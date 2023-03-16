@@ -406,7 +406,7 @@ public class Main {
 				int i = 0;
 				final List<CollectionCluster> clusters = new ArrayList<>();
 
-				final MyPushPublisher<Object[]> pushPublisher = new MyPushPublisher<>();
+				final MyPushPublisher<List<Object[]>> pushPublisher = new MyPushPublisher<>();
 				if (conf.useRSI) {
 					rsi = ReactiveStreamsIngestion
 							.builder()

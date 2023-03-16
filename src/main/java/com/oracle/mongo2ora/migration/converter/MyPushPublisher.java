@@ -3,13 +3,14 @@ package com.oracle.mongo2ora.migration.converter;
 import com.oracle.mongo2ora.util.Tools;
 import oracle.rsi.RSIException;
 
+import java.util.List;
 import java.util.concurrent.Flow;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class MyPushPublisher<T> implements oracle.rsi.PushPublisher<T> {
 
 	private boolean isClosed = false;
-	private Flow.Subscriber<? super T> rsiSubscriber;
+	private Flow.Subscriber<Object[]> rsiSubscriber;
 //	private final AtomicLong request = new AtomicLong(0L);
 
 	public MyPushPublisher() {
@@ -17,7 +18,7 @@ public class MyPushPublisher<T> implements oracle.rsi.PushPublisher<T> {
 
 	public void subscribe(Flow.Subscriber<? super T> subscriber) {
 		if (this.rsiSubscriber == null) {
-			(this.rsiSubscriber = subscriber).onSubscribe(new FlowSubscription());
+			(this.rsiSubscriber = (Flow.Subscriber<Object[]>)subscriber).onSubscribe(new FlowSubscription());
 		}
 		else {
 			if (!this.rsiSubscriber.equals(subscriber)) {
@@ -59,7 +60,10 @@ public class MyPushPublisher<T> implements oracle.rsi.PushPublisher<T> {
 		}
 		while (value == 0L);
 */
-		this.rsiSubscriber.onNext(object);
+		final List<Object[]> rows = (List<Object[]>)object;
+
+		for(Object[] row : rows)
+		this.rsiSubscriber.onNext(row);
 
 //		this.request.decrementAndGet();
 	}
