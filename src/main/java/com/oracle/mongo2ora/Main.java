@@ -421,7 +421,7 @@ public class Main {
 							.executor(rsiWorkerThreadPool)
 							//.bufferInterval(Duration.ofMillis(1000L))
 							.bufferRows(conf.RSIbufferRows /*49676730*/)
-//                            .averageMessageSize(350)
+							.rowsPerBatch(conf.RSIbufferRows)
 //                            .averageMessageSize(32*1024*1024)
 							//.bufferInterval(Duration.ofSeconds(20))
 //                            .bufferInterval(Duration.ofSeconds(1L))
@@ -432,8 +432,8 @@ public class Main {
 							.useDirectPathParallel()
 							.useDirectPathSkipIndexMaintenance()
 							.useDirectPathSkipUnusableIndexes()
-//							.useDirectPathStorageInit(String.valueOf(8*1024*1024))
-//							.useDirectPathStorageNext(String.valueOf(8*1024*1024))
+							.useDirectPathStorageInit(String.valueOf(8*1024*1024))
+							.useDirectPathStorageNext(String.valueOf(8*1024*1024))
 							.build();
 				}
 
