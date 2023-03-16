@@ -148,13 +148,10 @@ public class MemoptimizeForWriteBSON2OSONCollectionConverter implements Runnable
 							osonLength += osonData.length;
 
 //							addBatchStart = System.nanoTime();
-							//p.addBatch();
+							p.addBatch();
 //							addBatch += (System.nanoTime() - addBatchStart);
 
-							p.executeUpdate();
-							count++;
-
-/*							batchSizeCounter++;
+							batchSizeCounter++;
 
 							if (batchSizeCounter >= batchSize) {
 								count += batchSizeCounter;
@@ -163,15 +160,15 @@ public class MemoptimizeForWriteBSON2OSONCollectionConverter implements Runnable
 //								jdbcBatchExecute += (System.nanoTime() - jdbcBatchExecuteStart);
 								batchSizeCounter = 0;
 							}
-*/						}
+						}
 
-/*						if (batchSizeCounter > 0) {
+						if (batchSizeCounter > 0) {
 							count += batchSizeCounter;
 							//jdbcBatchExecuteStart = System.nanoTime();
 							p.executeLargeBatch();
 							//jdbcBatchExecute += (System.nanoTime() - jdbcBatchExecuteStart);
 						}
-*/
+
 						//realConnection.commit(commitOptions);
 
 						//LOGGER.info("count=" + count + ", mongoDBFetch=" + mongoDBFetch + ", bsonConvert=" + bsonConvert + ", serializeOSON=" + serializeOSON + ", addBatch=" + addBatch + ", jdbcBatchExecute=" + jdbcBatchExecute);
