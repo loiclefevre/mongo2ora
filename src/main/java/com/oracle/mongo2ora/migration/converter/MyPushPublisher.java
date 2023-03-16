@@ -1,5 +1,6 @@
 package com.oracle.mongo2ora.migration.converter;
 
+import com.oracle.mongo2ora.util.Tools;
 import oracle.rsi.RSIException;
 
 import java.util.concurrent.Flow;
@@ -30,17 +31,39 @@ public class MyPushPublisher<T> implements oracle.rsi.PushPublisher<T> {
 		if (this.isClosed) {
 			throw new RSIException("Cannot accept. Publisher is closed.");
 		}
+		int times = 0;
 		long value;
 		do {
 			value = this.request.get();
-			if(value == 0L) Thread.yield();
-		} while(value == 0L);
+			times++;
+			if (value == 0L) {
+				switch (times) {
+					case 1:
+						Thread.yield();
+						break;
+					case 2:
+					case 3:
+					case 4:
+						Tools.sleep(1L);
+						break;
+					case 5:
+					case 6:
+					case 7:
+					case 8:
+						Tools.sleep(2L);
+						break;
+					default:
+						Tools.sleep(4L);
+				}
+			}
+		}
+		while (value == 0L);
 /*		if ( == 0L) {
 			throw new RSIException("Notifying memory pressure.");
 		}
 		else { */
-			this.rsiSubscriber.onNext(object);
-			this.request.decrementAndGet();
+		this.rsiSubscriber.onNext(object);
+		this.request.decrementAndGet();
 //		}
 	}
 

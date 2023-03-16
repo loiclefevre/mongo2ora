@@ -12,4 +12,12 @@ public class Tools {
 			return duration.toString().substring(2).replaceAll("(\\d[HMS])(?!$)", "$1 ").replaceAll("\\.\\d+", "").toLowerCase();
 		}
 	}
+
+	public static void sleep(long ms) {
+		try {
+			Thread.sleep(ms);
+		}
+		catch (InterruptedException ignored) {
+		}
+	}
 }
