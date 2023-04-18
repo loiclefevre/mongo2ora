@@ -110,6 +110,10 @@ public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
 			current++;
 			final byte[] data = readNextBSONRawData(inputStream);
 
+			if(current % 10000 == 0) {
+				LOGGER.info("cursor created "+current+" documents");
+			}
+
 			return (TResult)new RawBsonDocument(data);
 		}
 		catch (IOException eof) {
