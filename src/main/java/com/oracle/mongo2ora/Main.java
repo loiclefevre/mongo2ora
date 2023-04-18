@@ -13,6 +13,7 @@ import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.Configuration;
 import com.oracle.mongo2ora.migration.ConversionInformation;
 import com.oracle.mongo2ora.migration.converter.BSON2TextCollectionConverter;
+import com.oracle.mongo2ora.migration.converter.DirectDirectPathBSON2OSONCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.DirectPathBSON2OSONCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.MemoptimizeForWriteBSON2OSONCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.MyPushPublisher;
@@ -52,6 +53,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -207,7 +209,7 @@ public class Main {
 		LOGGER.info( "COUNTER THREADS="+Math.min(conf.cores * 2, Runtime.getRuntime().availableProcessors()));
 		LOGGER.info( "COUNTER THREADS PRIORITY="+(WANTED_THREAD_PRIORITY - 1));
 
-		counterThreadPool = Executors.newFixedThreadPool(Math.min(conf.cores * 2, Runtime.getRuntime().availableProcessors()), new ThreadFactory() {
+		counterThreadPool = Executors.newVirtualThreadPerTaskExecutor(); /*Executors.newFixedThreadPool(Math.min(conf.cores * 2, Runtime.getRuntime().availableProcessors()), new ThreadFactory() {
 			private final AtomicInteger threadNumber = new AtomicInteger(0);
 			private final ThreadGroup group = new ThreadGroup("MongoDBMigration");
 
@@ -222,7 +224,7 @@ public class Main {
 					t.setPriority(WANTED_THREAD_PRIORITY - 1);
 				return t;
 			}
-		});
+		}); */
 
 //        System.out.println("Worker threads: "+(conf.useRSI ? 2* conf.cores/3 : conf.cores));
 		//System.out.println("Worker threads: 8");
@@ -230,7 +232,7 @@ public class Main {
 		LOGGER.info( "WORKER THREADS="+conf.cores);
 		LOGGER.info( "WORKER THREADS PRIORITY="+WANTED_THREAD_PRIORITY);
 
-		workerThreadPool = Executors.newFixedThreadPool(conf.cores /*conf.useRSI ? 2* conf.cores/3 : conf.cores*/,
+		workerThreadPool = counterThreadPool; /*Executors.newVirtualThreadPerTaskExecutor();*/ /*Executors.newFixedThreadPool(conf.cores, //conf.useRSI ? 2* conf.cores/3 : conf.cores
 				new ThreadFactory() {
 					private final AtomicInteger threadNumber = new AtomicInteger(0);
 					private final ThreadGroup group = new ThreadGroup("MongoDBMigration");
@@ -246,7 +248,7 @@ public class Main {
 							t.setPriority(WANTED_THREAD_PRIORITY);
 						return t;
 					}
-				});
+				});*/
 
 		try (MongoClient mongoClient = MongoClients.create(settings)) {
 			final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.useRSI ? 3 : conf.cores);
@@ -331,6 +333,8 @@ public class Main {
 			OracleAutoTasks.disableIfNeeded(adminPDS);
 
 			final PoolDataSource mediumPDS = MediumServiceManager.configure(adminPDS, pds, conf.destinationPassword);
+
+			final Semaphore DB_SEMAPHORE = new Semaphore(conf.cores);
 
 			for (Document collectionDescription : mongoDatabase.listCollections()) {
 				final String collectionName = collectionDescription.getString("name");
@@ -455,7 +459,7 @@ public class Main {
 							workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 						}
 						else {
-							workerThreadPool.execute(AUTONOMOUS_DATABASE ? new DirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize) :
+							workerThreadPool.execute(AUTONOMOUS_DATABASE ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE) :
 									new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 						}
 
@@ -469,6 +473,12 @@ public class Main {
 				clusters.clear();
 
 				final List<ConversionInformation> informations = publishingCfsConvert.stream().map(CompletableFuture::join).collect(toList());
+
+				for(ConversionInformation ci:informations) {
+					if(ci.exception != null) {
+						LOGGER.error("Error during ingestion!", ci.exception);
+					}
+				}
 
 				if (conf.useRSI) {
 					rsi.close();
@@ -521,10 +531,10 @@ public class Main {
 		pds.setInitialPoolSize(cores);
 		pds.setMinPoolSize(cores);
 		pds.setMaxPoolSize(cores);
-		pds.setTimeoutCheckInterval(4*120);
-		pds.setInactiveConnectionTimeout(4*120);
+		pds.setTimeoutCheckInterval(15*60);
+		pds.setInactiveConnectionTimeout(15*60);
 		pds.setValidateConnectionOnBorrow(!admin);
-		pds.setMaxStatements(20);
+		pds.setMaxStatements(5);
 		//pds.setMaxConnectionReuseTime(900);
 		//pds.setMaxConnectionReuseCount(5000);
 		//pds.setConnectionValidationTimeout();
@@ -567,3 +577,4 @@ public class Main {
 		return pds;
 	}
 }
+

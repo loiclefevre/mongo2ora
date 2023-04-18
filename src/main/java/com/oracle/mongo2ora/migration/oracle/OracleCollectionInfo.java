@@ -171,7 +171,7 @@ public class OracleCollectionInfo {
 					}
 				}
 
-				if (ret.primaryKeyIndexName != null && !autonomousDatabase) {
+				if (ret.primaryKeyIndexName != null /*&& !autonomousDatabase*/) {
 					LOGGER.info("Dropping primary key and associated index: " + ret.primaryKeyIndexName + " for collection " + collectionName);
 					LOGGER.info("Running: " + "alter table " + user + "." + collectionName + " drop primary key drop index");
 					p.execute("alter table " + user + "." + collectionName + " drop primary key drop index");
@@ -244,11 +244,11 @@ public class OracleCollectionInfo {
 						}
 					}
 
-					if (autonomousDatabase && "UNUSABLE".equalsIgnoreCase(currentPKIndexStatus)) {
+					if (false && autonomousDatabase && "UNUSABLE".equalsIgnoreCase(currentPKIndexStatus)) {
 
 
-						LOGGER.info("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + (2 * maxParallelDegree)));
-						s.execute("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + (2 * maxParallelDegree)));
+						LOGGER.info("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+						s.execute("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
 						LOGGER.info("Rebuild PK index with parallel degree of " + (2 * maxParallelDegree) + " in " + getDurationSince(start));
 					}
 					else {

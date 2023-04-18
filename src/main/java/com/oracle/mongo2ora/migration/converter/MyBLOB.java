@@ -316,26 +316,6 @@ public class MyBLOB implements OracleBlob {
 	}
 
 	@Override
-	public void setPrefetchedData(byte[] bytes) {
-
-	}
-
-	@Override
-	public void setPrefetchedData(byte[] bytes, int i) {
-
-	}
-
-	@Override
-	public byte[] getPrefetchedData() {
-		return new byte[0];
-	}
-
-	@Override
-	public int getPrefetchedDataSize() {
-		return 0;
-	}
-
-	@Override
 	public void setActivePrefetch(boolean b) {
 
 	}
@@ -406,6 +386,11 @@ public class MyBLOB implements OracleBlob {
 	}
 
 	@Override
+	public void freeLOB() throws SQLException {
+
+	}
+
+	@Override
 	public boolean isTemporary() throws SQLException {
 		return false;
 	}
@@ -413,6 +398,21 @@ public class MyBLOB implements OracleBlob {
 	@Override
 	public short getDuration() throws SQLException {
 		return 0;
+	}
+
+	@Override
+	public boolean isFree() {
+		return false;
+	}
+
+	@Override
+	public void setPrefetchData(PrefetchData<byte[]> prefetchData) {
+
+	}
+
+	@Override
+	public PrefetchData<byte[]> getPrefetchData() {
+		return null;
 	}
 
 	@Override
@@ -435,3 +435,4 @@ public class MyBLOB implements OracleBlob {
 		return null;
 	}
 }
+
