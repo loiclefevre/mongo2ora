@@ -9,6 +9,7 @@ import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.ConversionInformation;
 import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
+import com.oracle.mongo2ora.migration.mongodb.MongoCollectionDump;
 import oracle.jdbc.driver.DPRowBinder2;
 import oracle.jdbc.internal.OracleConnection;
 import oracle.ucp.jdbc.PoolDataSource;
@@ -73,6 +74,10 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
                         }
                     }
                     */
+
+				if(work.sourceDump) {
+					((MongoCollectionDump<RawBsonDocument>)collection).setWork(work);
+				}
 
 				final OracleConnection realConnection = (OracleConnection) c;
 

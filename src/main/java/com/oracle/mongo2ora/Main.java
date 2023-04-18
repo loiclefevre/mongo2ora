@@ -19,7 +19,6 @@ import com.oracle.mongo2ora.migration.converter.RSIBSON2OSONCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.RSIBSON2TextCollectionConverter;
 import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
 import com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer;
-import com.oracle.mongo2ora.migration.mongodb.DumpCluster;
 import com.oracle.mongo2ora.migration.mongodb.MongoDatabaseDump;
 import com.oracle.mongo2ora.migration.oracle.MediumServiceManager;
 import com.oracle.mongo2ora.migration.oracle.OracleAutoTasks;
@@ -364,7 +363,7 @@ public class Main {
 				// get number of indexes in this database
 				MONGODB_INDEXES = 0;
 				MongoDatabaseDump mongoDatabase = new MongoDatabaseDump(conf.sourceDumpFolder);
-				for (String c : mongoDatabase.listCollections()) {
+				for (String c : mongoDatabase.listCollectionsDump()) {
 					MONGODB_COLLECTIONS++;
 					MONGODB_INDEXES += mongoDatabase.getNumberOfIndexesForCollection(c);
 				}
@@ -381,7 +380,7 @@ public class Main {
 
 				final Semaphore DB_SEMAPHORE = new Semaphore(conf.cores);
 
-				for (String collectionName : mongoDatabase.listCollections()) {
+				for (String collectionName : mongoDatabase.listCollectionsDump()) {
 					if (!conf.selectedCollections.isEmpty() && !conf.selectedCollections.contains(collectionName)) {
 						//System.out.println("Collection " + collectionName + " will not be migrated.");
 						continue;
@@ -432,7 +431,7 @@ public class Main {
 */
 					//System.out.println(collectionName + ": bucket size= " + bucketSize + ", iterations: " + iterations);
 
-					final List<DumpCluster> publishingCfs = new LinkedList<>();
+					final List<CollectionCluster> publishingCfs = new LinkedList<>();
 
 					// scan the BSON data
 					// - compute averageDocumentSize
@@ -472,7 +471,7 @@ public class Main {
 
 								if(clusterCount == 5000000) {
 									count += clusterCount;
-									publishingCfs.add(new DumpCluster(clusterCount, clusterStartPosition));
+									publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
 									clusterStartPosition = position;
 									LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 									clusterCount = 0;
@@ -485,7 +484,7 @@ public class Main {
 
 						if( clusterCount > 0 ) {
 							count += clusterCount;
-							publishingCfs.add(new DumpCluster(clusterCount, clusterStartPosition));
+							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
 							LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 						}
 					}
@@ -497,7 +496,7 @@ public class Main {
 
 					long total = 0;
 					int i = 0;
-					final List<DumpCluster> clusters = new ArrayList<>();
+					final List<CollectionCluster> clusters = new ArrayList<>();
 
 					if (conf.useRSI) {
 						rsi = ReactiveStreamsIngestion
@@ -525,16 +524,16 @@ public class Main {
 								.build();
 					}
 
-					for (DumpCluster cc : publishingCfs) {
+					for (CollectionCluster cc : publishingCfs) {
 						clusters.add(cc);
 
 						if (cc.count > 0) {
 							total += cc.count;
-/*							mongoDBCollectionClusters.add(cc);
+							mongoDBCollectionClusters.add(cc);
 
 							final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
 							publishingCfsConvert.add(pCf);
-							if (conf.useRSI) {
+/*							if (conf.useRSI) {
 								workerThreadPool.execute(AUTONOMOUS_DATABASE ? new RSIBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize) :
 										new RSIBSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize));
 							}
@@ -542,9 +541,9 @@ public class Main {
 								workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 							}
 							else {
-								workerThreadPool.execute(AUTONOMOUS_DATABASE ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE) :
+*/								workerThreadPool.execute(AUTONOMOUS_DATABASE ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE) :
 										new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
-							}
+/*							}
 */
 							i++;
 						}
