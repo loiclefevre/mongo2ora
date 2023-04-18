@@ -6,6 +6,7 @@ import org.bson.types.Decimal128;
 import org.bson.types.ObjectId;
 
 import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -28,7 +29,7 @@ public class MyBSON2OSONWriter implements BsonWriter {
 		return result;
 	}
 
-	private final ByteArrayOutputStream out = new ByteArrayOutputStream();
+	private final MyByteArrayOutputStream out = new MyByteArrayOutputStream();
 	//private JsonGenerator gen;
 	private OracleJsonGenerator gen;
 

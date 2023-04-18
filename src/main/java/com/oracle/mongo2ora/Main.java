@@ -555,26 +555,6 @@ public class Main {
 		for (int i = 0; i < cons.length; i++) {
 			cons[i].close();
 		}
-
-        /*
-        try {
-            try (InputStream in = new FileInputStream("/home/opc/jsonloader/jdbc.properties")) {
-                Properties p = new Properties();
-                p.load(in);
-
-                for (Object k : p.keySet()) {
-                    String key = (String) k;
-
-                    System.out.println("Adding property " + key + "=" + p.getProperty(key));
-                    pds.setConnectionProperty(key, p.getProperty(key));
-                }
-            }
-        } catch (Throwable t) {
-            t.printStackTrace();
-        }
-        */
-
 		return pds;
 	}
 }
-
