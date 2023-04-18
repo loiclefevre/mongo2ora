@@ -1,6 +1,8 @@
 package com.oracle.mongo2ora.migration;
 
 import com.mongodb.client.MongoCollection;
+import com.oracle.mongo2ora.migration.mongodb.MetadataIndex;
+import com.oracle.mongo2ora.migration.mongodb.MongoDBMetadata;
 import org.bson.Document;
 
 import java.util.Arrays;
@@ -22,6 +24,25 @@ public class CollectionIndexesInfo {
 			totalMongoDBIndexes++;
 
 			if (i.getString("name").contains("$**") || "text".equals(i.getEmbedded(Arrays.asList("key"), Document.class).getString("_fts"))) {
+				needSearchIndex = true; //System.out.println("Need Search Index");
+			} else {
+				expectedOracleIndexes++;
+			}
+		}
+
+		if(needSearchIndex) {
+			expectedOracleIndexes++;
+		}
+	}
+	public CollectionIndexesInfo(MongoDBMetadata collectionMetadata) {
+		initialize(collectionMetadata);
+	}
+	private void initialize(MongoDBMetadata collectionMetadata) {
+		boolean needSearchIndex = false;
+		for (MetadataIndex i : collectionMetadata.getIndexes()) {
+			totalMongoDBIndexes++;
+
+			if (i.getName().contains("$**") || i.getKey().text) {
 				needSearchIndex = true; //System.out.println("Need Search Index");
 			} else {
 				expectedOracleIndexes++;

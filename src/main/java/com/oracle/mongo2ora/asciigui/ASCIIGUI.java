@@ -4,6 +4,7 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.diagnostics.logging.Logger;
 import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.migration.CollectionIndexesInfo;
+import com.oracle.mongo2ora.migration.mongodb.MongoDBMetadata;
 import com.oracle.mongo2ora.util.XYTerminalOutput;
 import net.rubygrapefruit.platform.terminal.TerminalOutput;
 import oracle.ucp.jdbc.PoolDataSource;
@@ -411,7 +412,7 @@ public class ASCIIGUI extends TimerTask {
 		currentCollectionProgressBar.addJSONDocs(docNumber);
 	}
 
-	public synchronized void addNewDestinationDatabaseCollection(String newCollectionName, MongoCollection<Document> mongoCollection) {
+	public synchronized void addNewDestinationDatabaseCollection(String newCollectionName, MongoCollection<Document> mongoCollection, MongoDBMetadata collectionMetadata) {
 		if (numberOfOracleCollections == -1) {
 			numberOfOracleCollections = 1;
 		}
@@ -422,7 +423,11 @@ public class ASCIIGUI extends TimerTask {
 		finishLastCollection();
 		collections.add(0, newCollectionName);
 		collectionsProgressBars.add(0, currentCollectionProgressBar = new ASCIICollectionProgressBar(50, System.currentTimeMillis()));
-		collectionsIndexes.add(0, new CollectionIndexesInfo(mongoCollection));
+		if(mongoCollection != null) {
+			collectionsIndexes.add(0, new CollectionIndexesInfo(mongoCollection));
+		} else {
+			collectionsIndexes.add(0, new CollectionIndexesInfo(collectionMetadata));
+		}
 	}
 
 	public synchronized void finishLastCollection() {
