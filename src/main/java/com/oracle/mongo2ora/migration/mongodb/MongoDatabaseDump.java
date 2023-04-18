@@ -79,4 +79,14 @@ public class MongoDatabaseDump {
 
 		return null;
 	}
+
+	public File getBSONFile(String c) {
+		File collectionData= new File(sourceDumpFolder,c+".bson");
+		if(!collectionData.exists()) {
+			collectionData= new File(sourceDumpFolder,c+".bson.gz");
+			if(!collectionData.exists()) return null;
+		}
+
+		return collectionData;
+	}
 }

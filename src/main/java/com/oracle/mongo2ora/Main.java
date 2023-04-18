@@ -35,8 +35,12 @@ import org.bson.BsonDocument;
 import org.bson.BsonInt32;
 import org.bson.Document;
 
+import java.io.BufferedInputStream;
+import java.io.EOFException;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.Security;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -55,6 +59,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.GZIPInputStream;
 
 import static com.mongodb.client.model.Projections.include;
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
@@ -122,6 +127,33 @@ public class Main {
 
 	public static boolean AUTONOMOUS_DATABASE = false;
 	public static String AUTONOMOUS_DATABASE_TYPE = "";
+
+	private final static byte[] bsonDataSize = new byte[4];
+
+	private static byte[] readNextBSONRawData(InputStream input) throws IOException {
+		int readBytes = input.read(bsonDataSize, 0, 4);
+		if (readBytes != 4) throw new EOFException();
+
+		final int bsonSize = (bsonDataSize[0] & 0xff) |
+				((bsonDataSize[1] & 0xff) << 8) |
+				((bsonDataSize[2] & 0xff) << 16) |
+				((bsonDataSize[3] & 0xff) << 24);
+
+		final byte[] rawData = new byte[bsonSize];
+
+		System.arraycopy(bsonDataSize, 0, rawData, 0, 4);
+
+		for (int i = bsonSize - 4, off = 4; i > 0; off += readBytes) {
+			readBytes = input.read(rawData, off, i);
+			if (readBytes < 0) {
+				throw new EOFException();
+			}
+
+			i -= readBytes;
+		}
+
+		return rawData;
+	}
 
 	public static void main(final String[] args) {
 		// For Autonomous Database CMAN load balancing
@@ -397,6 +429,27 @@ public class Main {
 						counterThreadPool.execute(new CollectionClusteringAnalyzer(i, collectionName, publishingCf, tempMin, _max, mongoDatabase, gui, averageDocumentSize));
 					}
 */
+					final File bsonFile = mongoDatabase.getBSONFile(collectionName);
+
+					long count = 0;
+
+					try (
+							InputStream inputStream = bsonFile.getName().toLowerCase().endsWith(".gz") ?
+									new GZIPInputStream(new FileInputStream(bsonFile), 128 * 1024 * 1024)
+									: new BufferedInputStream(new FileInputStream(bsonFile), 128 * 1024 * 1024)
+					) {
+						while (true) {
+							try {
+								final byte[] data = readNextBSONRawData(inputStream);
+								count++;
+							} catch (EOFException eof) {
+								break;
+							}
+						}
+					}
+
+					LOGGER.info("Collection "+collectionName+" has "+count+" JSON document(s).");
+
 					final List<CompletableFuture<ConversionInformation>> publishingCfsConvert = new LinkedList<>();
 					final List<CollectionCluster> mongoDBCollectionClusters = new ArrayList<>();
 
