@@ -38,10 +38,10 @@ public class MongoDatabaseDump {
 
 	public int getNumberOfIndexesForCollection(String c) {
 		File collectionMetadata= new File(sourceDumpFolder,c+".metadata.json");
-		if(!collectionMetadata.exists()) return 0;
-		collectionMetadata= new File(sourceDumpFolder,c+".metadata.json.gz");
-		if(!collectionMetadata.exists()) return 0;
-
+		if(!collectionMetadata.exists()) {
+			collectionMetadata = new File(sourceDumpFolder, c + ".metadata.json.gz");
+			if (!collectionMetadata.exists()) return 0;
+		}
 		final ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 		final SimpleModule indexKeyModule = new SimpleModule();
 		indexKeyModule.addDeserializer(MetadataKey.class, new MetadataKeyDeserializer());
@@ -60,9 +60,10 @@ public class MongoDatabaseDump {
 	}
 	public MongoDBMetadata getCollectionMetadata(String c) {
 		File collectionMetadata= new File(sourceDumpFolder,c+".metadata.json");
-		if(!collectionMetadata.exists()) return null;
-		collectionMetadata= new File(sourceDumpFolder,c+".metadata.json.gz");
-		if(!collectionMetadata.exists()) return null;
+		if(!collectionMetadata.exists()) {
+			collectionMetadata= new File(sourceDumpFolder,c+".metadata.json.gz");
+			if(!collectionMetadata.exists()) return null;
+		}
 
 		final ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 		final SimpleModule indexKeyModule = new SimpleModule();
