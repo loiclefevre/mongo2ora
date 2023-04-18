@@ -4,6 +4,7 @@ import com.oracle.mongo2ora.Main;
 import net.rubygrapefruit.platform.terminal.TerminalOutput;
 import oracle.ucp.jdbc.PoolDataSource;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -41,9 +42,14 @@ public class Configuration {
 	public final List<String> selectedCollections = new ArrayList<>();
 	public int maxSQLParallelDegree;
 
-	public int RSIThreads = Math.max(1, (int)(Runtime.getRuntime().availableProcessors() / 3));
+	public int RSIThreads = Math.max(1, (int) (Runtime.getRuntime().availableProcessors() / 3));
 
-	public int RSIbufferRows = 64*1024;
+	public int RSIbufferRows = 64 * 1024;
+
+	public boolean sourceDump;
+
+	public String sourceDumpFolder;
+	public boolean mongodbAPICompatible;
 
 	public static Configuration prepareConfiguration(String[] args) {
 		Configuration conf = new Configuration();
@@ -51,6 +57,10 @@ public class Configuration {
 		for (int i = 0; i < args.length; i++) {
 			final String arg = args[i];
 			switch (arg.toLowerCase()) {
+				case "--mongodbapi":
+					conf.mongodbAPICompatible = true;
+					break;
+
 				case "-s":
 					if (i + 1 < args.length) {
 						conf.source = args[++i];
@@ -199,42 +209,56 @@ public class Configuration {
 		String temp = source;
 
 		if (temp.startsWith("mongodb://")) {
+			sourceDump = false;
 			temp = temp.substring("mongodb://".length());
-		}
 
-		if (temp.indexOf("@") != -1) {
-			final String start = temp.substring(0, temp.indexOf("@"));
+			if (temp.indexOf("@") != -1) {
+				final String start = temp.substring(0, temp.indexOf("@"));
 
-			if (start.indexOf(":") != -1) {
-				sourceUsername = start.substring(0, start.indexOf(":"));
-				sourcePassword = start.substring(start.indexOf(":") + 1);
-			}
+				if (start.indexOf(":") != -1) {
+					sourceUsername = start.substring(0, start.indexOf(":"));
+					sourcePassword = start.substring(start.indexOf(":") + 1);
+				}
 
-			final String end = temp.substring(temp.indexOf("@") + 1);
+				final String end = temp.substring(temp.indexOf("@") + 1);
 
-			if (end.indexOf(":") != -1) {
-				sourceHost = end.substring(0, end.indexOf(":"));
-				final String portDB = end.substring(end.indexOf(":") + 1);
+				if (end.indexOf(":") != -1) {
+					sourceHost = end.substring(0, end.indexOf(":"));
+					final String portDB = end.substring(end.indexOf(":") + 1);
 
-				if (portDB.indexOf("/") != -1) {
-					sourcePort = Integer.parseInt(portDB.substring(0, portDB.indexOf("/")));
-					sourceDatabase = portDB.substring(portDB.indexOf("/") + 1);
+					if (portDB.indexOf("/") != -1) {
+						sourcePort = Integer.parseInt(portDB.substring(0, portDB.indexOf("/")));
+						sourceDatabase = portDB.substring(portDB.indexOf("/") + 1);
+					}
 				}
 			}
-		}
-		else {
-			sourceUsername = "";
-			sourcePassword = "";
+			else {
+				sourceUsername = "";
+				sourcePassword = "";
 
-			if (temp.indexOf(":") != -1) {
-				sourceHost = temp.substring(0, temp.indexOf(":"));
-				final String portDB = temp.substring(temp.indexOf(":") + 1);
+				if (temp.indexOf(":") != -1) {
+					sourceHost = temp.substring(0, temp.indexOf(":"));
+					final String portDB = temp.substring(temp.indexOf(":") + 1);
 
-				if (portDB.indexOf("/") != -1) {
-					sourcePort = Integer.parseInt(portDB.substring(0, portDB.indexOf("/")));
-					sourceDatabase = portDB.substring(portDB.indexOf("/") + 1);
+					if (portDB.indexOf("/") != -1) {
+						sourcePort = Integer.parseInt(portDB.substring(0, portDB.indexOf("/")));
+						sourceDatabase = portDB.substring(portDB.indexOf("/") + 1);
+					}
 				}
 			}
+		} else if (temp.startsWith("mongodump://")) {
+			sourceDump = true;
+			sourceDumpFolder = temp.substring("mongodump://".length());
+
+			final File dumpFolder = new File(sourceDumpFolder);
+
+			if(!dumpFolder.exists()) {
+				displayUsage("mongodump folder \""+sourceDumpFolder+"\" doesn't exist!");
+			}
+			if(!dumpFolder.isDirectory()) {
+				displayUsage("mongodump folder \""+sourceDumpFolder+"\" is not a folder!");
+			}
+			sourceDatabase = dumpFolder.getName();
 		}
 	}
 

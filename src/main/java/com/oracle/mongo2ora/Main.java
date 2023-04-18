@@ -177,26 +177,33 @@ public class Main {
 						}
 					});
 		}
+
 		// Connect to MongoDB database
-		final MongoCredential credential = MongoCredential.createCredential(conf.sourceUsername, conf.sourceDatabase, conf.sourcePassword.toCharArray());
+		MongoCredential credential = null;
+		if(!conf.sourceDump) {
+			credential = MongoCredential.createCredential(conf.sourceUsername, conf.sourceDatabase, conf.sourcePassword.toCharArray());
+		}
 
-		final MongoClientSettings settings = conf.sourceUsername == null || conf.sourceUsername.isEmpty() ?
-				MongoClientSettings.builder()
-						.applyToSocketSettings(builder -> builder.connectTimeout(1, TimeUnit.DAYS))
-						.applyToConnectionPoolSettings(builder ->
-								builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxConnectionIdleTime(10, TimeUnit.MINUTES))
-						.applyToClusterSettings(builder ->
-								builder.hosts(Arrays.asList(new ServerAddress(conf.sourceHost, conf.sourcePort))))
-						.build()
-				: MongoClientSettings.builder()
-				.applyToSocketSettings(builder -> builder.connectTimeout(1, TimeUnit.DAYS))
-				.credential(credential)
-				.applyToConnectionPoolSettings(builder ->
-						builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxConnectionIdleTime(10, TimeUnit.MINUTES))
-				.applyToClusterSettings(builder ->
-						builder.hosts(Arrays.asList(new ServerAddress(conf.sourceHost, conf.sourcePort))))
-				.build();
+		MongoClientSettings settings = null;
 
+		if(!conf.sourceDump) {
+			settings = conf.sourceUsername == null || conf.sourceUsername.isEmpty() ?
+					MongoClientSettings.builder()
+							.applyToSocketSettings(builder -> builder.connectTimeout(1, TimeUnit.DAYS))
+							.applyToConnectionPoolSettings(builder ->
+									builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxConnectionIdleTime(10, TimeUnit.MINUTES))
+							.applyToClusterSettings(builder ->
+									builder.hosts(Arrays.asList(new ServerAddress(conf.sourceHost, conf.sourcePort))))
+							.build()
+					: MongoClientSettings.builder()
+					.applyToSocketSettings(builder -> builder.connectTimeout(1, TimeUnit.DAYS))
+					.credential(credential)
+					.applyToConnectionPoolSettings(builder ->
+							builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxConnectionIdleTime(10, TimeUnit.MINUTES))
+					.applyToClusterSettings(builder ->
+							builder.hosts(Arrays.asList(new ServerAddress(conf.sourceHost, conf.sourcePort))))
+					.build();
+		}
 
 		//----------------------------------------------------------------------------------------------
 		// PREPARING THREAD POOLS
@@ -252,24 +259,11 @@ public class Main {
 
 		try (MongoClient mongoClient = MongoClients.create(settings)) {
 			final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.useRSI ? 3 : conf.cores);
-
-			/*try (Connection c = pds.getConnection()) {
-				try( ResultSet r = c.getMetaData().getColumns(null, null, "MOVIES", null)) {
-					while(r.next()) {
-						StringBuilder s = new StringBuilder();
-						for(int i = 0; i < r.getMetaData().getColumnCount(); i++){
-							s.append(" ").append(r.getMetaData().getColumnName(i+1));
-						}
-						LOGGER.warn("Metadata columns: "+s.toString());
-						LOGGER.warn(r.getString("COLUMN_NAME")+": "+r.getString("DATA_TYPE")+", "+r.getString("TYPE_NAME")+", "+r.getString("SQL_DATA_TYPE")+", "+r.getString("SOURCE_DATA_TYPE"));
-					}
-				}
-			}*/
-
 			final PoolDataSource adminPDS = initializeConnectionPool(true, conf.destinationConnectionString, conf.destinationAdminUser, conf.destinationAdminPassword, 3);
 			conf.initializeMaxParallelDegree(adminPDS);
 			gui.setPDS(adminPDS);
 
+			// Get destination database information
 			try (Connection c = adminPDS.getConnection()) {
 				try (Statement s = c.createStatement()) {
 					try (ResultSet r = s.executeQuery("select version_full, count(*) from gv$instance group by version_full")) {
@@ -430,7 +424,7 @@ public class Main {
 							//.bufferInterval(Duration.ofSeconds(20))
 //                            .bufferInterval(Duration.ofSeconds(1L))
 							.table(collectionName)
-							.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", "JSON_DOCUMENT"})
+							.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT"})
 							.useDirectPath()
 							.useDirectPathNoLog()
 							.useDirectPathParallel()
