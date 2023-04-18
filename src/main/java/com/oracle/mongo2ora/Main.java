@@ -155,6 +155,29 @@ public class Main {
 		return rawData;
 	}
 
+	static long position = 0;
+	private static void skipNextBSONRawData(InputStream input) throws IOException {
+		int readBytes = input.read(bsonDataSize, 0, 4);
+		if (readBytes != 4) throw new EOFException();
+
+		final int bsonSize = (bsonDataSize[0] & 0xff) |
+				((bsonDataSize[1] & 0xff) << 8) |
+				((bsonDataSize[2] & 0xff) << 16) |
+				((bsonDataSize[3] & 0xff) << 24);
+
+		position += bsonSize;
+
+		long skeptBytes;
+		for (int i = bsonSize - 4; i > 0; ) {
+			skeptBytes = input.skip(i);
+			if (skeptBytes < 0) {
+				throw new EOFException();
+			}
+
+			i -= skeptBytes;
+		}
+	}
+
 	public static void main(final String[] args) {
 		// For Autonomous Database CMAN load balancing
 		Security.setProperty("networkaddress.cache.ttl", "0");
@@ -440,7 +463,8 @@ public class Main {
 					) {
 						while (true) {
 							try {
-								final byte[] data = readNextBSONRawData(inputStream);
+								//final byte[] data = readNextBSONRawData(inputStream);
+								skipNextBSONRawData(inputStream);
 								count++;
 							} catch (EOFException eof) {
 								break;
