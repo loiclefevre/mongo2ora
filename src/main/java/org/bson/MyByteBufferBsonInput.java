@@ -4,11 +4,13 @@ import org.bson.io.BsonInput;
 import org.bson.io.BsonInputMark;
 import org.bson.types.ObjectId;
 
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 
 public class MyByteBufferBsonInput implements BsonInput {
 	private static final Charset UTF8_CHARSET = Charset.forName("UTF-8");
+	private static final String REPLACEMENT_STRING = UTF8_CHARSET.newDecoder().replacement();
 	private static final String[] ONE_BYTE_ASCII_STRINGS = new String[128];
 	private ByteBuf buffer;
 
@@ -56,10 +58,10 @@ public class MyByteBufferBsonInput implements BsonInput {
 		return this.buffer.getInt();
 	}
 
+	private final byte[] bytes = new byte[12];
 	public ObjectId readObjectId() {
-		byte[] bytes = new byte[12];
-		this.readBytes(bytes);
-		return new ObjectId(bytes);
+		this.readBytes(bytes,0,12);
+		return new ObjectId(ByteBuffer.wrap(bytes));
 	}
 
 	public String readString() {
@@ -79,7 +81,9 @@ public class MyByteBufferBsonInput implements BsonInput {
 		return this.readString(size);
 	}
 
-	private String readString(final int size) {
+	private final byte[] readStringBuffer = new byte[1024*1024];
+
+	private final String readString(final int size) {
 		//byte nullByte;
 		if (size == 2) {
 			final byte asciiByte = this.buffer.get();
@@ -87,17 +91,21 @@ public class MyByteBufferBsonInput implements BsonInput {
             /*if (nullByte != 0) {
                 throw new BsonSerializationException("Found a BSON string that is not null-terminated");
             } else {*/
-			return asciiByte < 0 ? UTF8_CHARSET.newDecoder().replacement() : ONE_BYTE_ASCII_STRINGS[asciiByte];
+			return asciiByte < 0 ? REPLACEMENT_STRING : ONE_BYTE_ASCII_STRINGS[asciiByte];
 			//}
 		} else {
-			final byte[] bytes = new byte[size - 1];
-			this.buffer.get(bytes);
-			/*nullByte =*/ this.buffer.get();
-            /*if (nullByte != 0) {
-                throw new BsonSerializationException("Found a BSON string that is not null-terminated");
-            } else {*/
-			return new String(bytes, 0, size-1, UTF8_CHARSET);
-			//}
+//			final byte[] bytes = new byte[size - 1];
+//			this.buffer.get(bytes);
+//			/*nullByte =*/ this.buffer.get();
+//            /*if (nullByte != 0) {
+//                throw new BsonSerializationException("Found a BSON string that is not null-terminated");
+//            } else {*/
+//			return new String(bytes, 0, size-1, UTF8_CHARSET);
+//			//}
+
+			this.buffer.get(readStringBuffer,0,size);
+			//this.buffer.get(); // read null
+			return new String(readStringBuffer, 0, size-1, UTF8_CHARSET);
 		}
 	}
 
@@ -145,3 +153,4 @@ public class MyByteBufferBsonInput implements BsonInput {
 
 	}
 }
+

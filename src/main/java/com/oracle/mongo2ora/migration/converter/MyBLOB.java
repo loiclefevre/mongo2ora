@@ -435,3 +435,4 @@ public class MyBLOB implements OracleBlob {
 		return null;
 	}
 }
+

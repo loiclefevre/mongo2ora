@@ -17,7 +17,7 @@
         <graalvm.version>22.3.1</graalvm.version>
         <oracle.jdbc.version>21.9.0.0</oracle.jdbc.version>
 
-        <targetJavaVersion>17</targetJavaVersion>
+        <targetJavaVersion>19</targetJavaVersion>
         <maven.compiler.source>${targetJavaVersion}</maven.compiler.source>
         <maven.compiler.target>${targetJavaVersion}</maven.compiler.target>
         <maven.compiler.release>${targetJavaVersion}</maven.compiler.release>
@@ -124,7 +124,7 @@
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
             <artifactId>ojdbc11</artifactId>
-            <version>${oracle.jdbc.version}</version>
+            <version>21.9.0.1</version>
         </dependency>
         <dependency>
             <groupId>com.oracle.database.xml</groupId>
@@ -134,7 +134,7 @@
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
             <artifactId>ucp</artifactId>
-            <version>${oracle.jdbc.version}</version>
+            <version>21.9.0.1</version>
         </dependency>
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>

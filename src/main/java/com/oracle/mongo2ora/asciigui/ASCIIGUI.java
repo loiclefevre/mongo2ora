@@ -221,7 +221,9 @@ public class ASCIIGUI extends TimerTask {
 	}
 
 	private long prevBytesReceivedFromClient = -1;
+	private long currentBytesReceivedFromClient = -1;
 	private Timestamp prevTimestamp = new Timestamp(new Date().getTime());
+	private Timestamp currentTimestamp = new Timestamp(new Date().getTime());
 	private long bytesReceivedFromClient;
 	private long snap;
 	private long prevSnap = -1;
@@ -278,25 +280,29 @@ public class ASCIIGUI extends TimerTask {
 		if (getPds() != null) {
 			try (Connection c = getPds().getConnection()) {
 				try (PreparedStatement p = c.prepareStatement(
-						"SELECT /*+ rule */ current_timestamp, sum(VALUE), ((sum(VALUE)-?)/(1024*1024))/(extract(minute from (current_timestamp-?)*60)+extract(second from (current_timestamp-?))) \n" +
+						"SELECT current_timestamp, sum(VALUE)\n" +
 						"FROM gv$sysstat WHERE NAME = 'bytes received via SQL*Net from client'")) {
-
-					p.setLong(1,prevBytesReceivedFromClient);
-					p.setTimestamp(2,prevTimestamp);
-					p.setTimestamp(3,prevTimestamp);
 
 					try (ResultSet r = p.executeQuery()) {
 						if (r.next()) {
 							turn++;
 
-							prevTimestamp = r.getTimestamp(1);
-							prevBytesReceivedFromClient = r.getLong(2);
-							bytesReceivedFromClientRealInMBPerSec = r.getDouble(3);
+							prevTimestamp = currentTimestamp;
+							currentTimestamp = r.getTimestamp(1);
+							prevBytesReceivedFromClient = currentBytesReceivedFromClient;
+							currentBytesReceivedFromClient = r.getLong(2);
 
-							if (turn > 2 && bytesReceivedFromClientRealInMBPerSec >= 0d) {
-								maxBytesReceivedFromClientRealInMBPerSec = Math.max(maxBytesReceivedFromClientRealInMBPerSec, bytesReceivedFromClientRealInMBPerSec);
-								LOGGER.info("Current throughput: "+bytesReceivedFromClientRealInMBPerSec+" MB/s; Maximum throughput: "+maxBytesReceivedFromClientRealInMBPerSec+" MB/s");
-								speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec, maxBytesReceivedFromClientRealInMBPerSec);
+							//bytesReceivedFromClientRealInMBPerSec = r.getDouble(3);
+
+							if (turn > 2) {
+
+								bytesReceivedFromClientRealInMBPerSec = ((currentBytesReceivedFromClient-prevBytesReceivedFromClient)/(1024d*1024d)) / (0.001d*(currentTimestamp.getTime()-prevTimestamp.getTime()));
+
+								if( bytesReceivedFromClientRealInMBPerSec >= 0d ) {
+									maxBytesReceivedFromClientRealInMBPerSec = Math.max(maxBytesReceivedFromClientRealInMBPerSec, bytesReceivedFromClientRealInMBPerSec);
+									LOGGER.info("Current throughput: " + bytesReceivedFromClientRealInMBPerSec + " MB/s; Maximum throughput: " + maxBytesReceivedFromClientRealInMBPerSec + " MB/s");
+									speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec, maxBytesReceivedFromClientRealInMBPerSec);
+								}
 							}
 						}
 					}
@@ -306,6 +312,37 @@ public class ASCIIGUI extends TimerTask {
 				LOGGER.error("Updating counters",ignored);
 			}
 		}
+//		if (getPds() != null) {
+//			try (Connection c = getPds().getConnection()) {
+//				try (PreparedStatement p = c.prepareStatement(
+//						"SELECT /*+ rule */ current_timestamp, sum(VALUE), ((sum(VALUE)-?)/(1024*1024))/(extract(minute from (current_timestamp-?)*60)+extract(second from (current_timestamp-?))) \n" +
+//						"FROM gv$sysstat WHERE NAME = 'bytes received via SQL*Net from client'")) {
+//
+//					p.setLong(1,prevBytesReceivedFromClient);
+//					p.setTimestamp(2,prevTimestamp);
+//					p.setTimestamp(3,prevTimestamp);
+//
+//					try (ResultSet r = p.executeQuery()) {
+//						if (r.next()) {
+//							turn++;
+//
+//							prevTimestamp = r.getTimestamp(1);
+//							prevBytesReceivedFromClient = r.getLong(2);
+//							bytesReceivedFromClientRealInMBPerSec = r.getDouble(3);
+//
+//							if (turn > 2 && bytesReceivedFromClientRealInMBPerSec >= 0d) {
+//								maxBytesReceivedFromClientRealInMBPerSec = Math.max(maxBytesReceivedFromClientRealInMBPerSec, bytesReceivedFromClientRealInMBPerSec);
+//								LOGGER.info("Current throughput: "+bytesReceivedFromClientRealInMBPerSec+" MB/s; Maximum throughput: "+maxBytesReceivedFromClientRealInMBPerSec+" MB/s");
+//								speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec, maxBytesReceivedFromClientRealInMBPerSec);
+//							}
+//						}
+//					}
+//				}
+//			}
+//			catch (SQLException ignored) {
+//				LOGGER.error("Updating counters",ignored);
+//			}
+//		}
 
 		write(term);
 	}
@@ -434,3 +471,4 @@ public class ASCIIGUI extends TimerTask {
 		this.databaseType = databaseType;
 	}
 }
+
