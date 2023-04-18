@@ -3,6 +3,8 @@ package com.oracle.mongo2ora.migration.mongodb;
 import com.mongodb.ServerAddress;
 import com.mongodb.ServerCursor;
 import com.mongodb.client.MongoCursor;
+import com.mongodb.diagnostics.logging.Logger;
+import com.mongodb.diagnostics.logging.Loggers;
 import org.bson.RawBsonDocument;
 
 import java.io.BufferedInputStream;
@@ -15,6 +17,7 @@ import java.io.InputStream;
 import java.util.zip.GZIPInputStream;
 
 public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
+	private static final Logger LOGGER = Loggers.getLogger("MongoCursorDump");
 	public final FindIterableDump<TResult> findIterable;
 	public final long count;
 	public long current;
@@ -46,6 +49,7 @@ public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
 					break;
 				}
 			}*/
+			LOGGER.info("Collection " +findIterable.mongoCollectionDump.name+" has "+count+" documents.");
 		}
 		catch (FileNotFoundException e) {
 			throw new RuntimeException(e);
@@ -86,6 +90,7 @@ public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
 	public void close() {
 		try {
 			if(inputStream != null) {
+				LOGGER.info("Collection " +findIterable.mongoCollectionDump.name+" closing inputStream.");
 				inputStream.close();
 			}
 		}
