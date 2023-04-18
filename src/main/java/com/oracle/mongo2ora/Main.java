@@ -19,6 +19,7 @@ import com.oracle.mongo2ora.migration.converter.RSIBSON2OSONCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.RSIBSON2TextCollectionConverter;
 import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
 import com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer;
+import com.oracle.mongo2ora.migration.mongodb.DumpCluster;
 import com.oracle.mongo2ora.migration.mongodb.MongoDatabaseDump;
 import com.oracle.mongo2ora.migration.oracle.MediumServiceManager;
 import com.oracle.mongo2ora.migration.oracle.OracleAutoTasks;
@@ -431,7 +432,7 @@ public class Main {
 */
 					//System.out.println(collectionName + ": bucket size= " + bucketSize + ", iterations: " + iterations);
 
-					final List<CompletableFuture<CollectionCluster>> publishingCfs = new LinkedList<>();
+					final List<DumpCluster> publishingCfs = new LinkedList<>();
 
 					// scan the BSON data
 					// - compute averageDocumentSize
@@ -461,14 +462,31 @@ public class Main {
 									new GZIPInputStream(new FileInputStream(bsonFile), 128 * 1024 * 1024)
 									: new BufferedInputStream(new FileInputStream(bsonFile), 128 * 1024 * 1024)
 					) {
+						long clusterStartPosition = 0;
+						long clusterCount = 0;
 						while (true) {
 							try {
 								//final byte[] data = readNextBSONRawData(inputStream);
 								skipNextBSONRawData(inputStream);
-								count++;
+								clusterCount++;
+
+								if(clusterCount == 5000000) {
+									count += clusterCount;
+									publishingCfs.add(new DumpCluster(clusterCount, clusterStartPosition));
+									clusterStartPosition = position;
+									LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+									clusterCount = 0;
+								}
+
 							} catch (EOFException eof) {
 								break;
 							}
+						}
+
+						if( clusterCount > 0 ) {
+							count += clusterCount;
+							publishingCfs.add(new DumpCluster(clusterCount, clusterStartPosition));
+							LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 						}
 					}
 
@@ -479,7 +497,7 @@ public class Main {
 
 					long total = 0;
 					int i = 0;
-					final List<CollectionCluster> clusters = new ArrayList<>();
+					final List<DumpCluster> clusters = new ArrayList<>();
 
 					if (conf.useRSI) {
 						rsi = ReactiveStreamsIngestion
@@ -507,8 +525,7 @@ public class Main {
 								.build();
 					}
 
-					for (CompletableFuture<CollectionCluster> publishingCf : publishingCfs) {
-						CollectionCluster cc = publishingCf.join();
+					for (DumpCluster cc : publishingCfs) {
 						clusters.add(cc);
 
 						if (cc.count > 0) {
