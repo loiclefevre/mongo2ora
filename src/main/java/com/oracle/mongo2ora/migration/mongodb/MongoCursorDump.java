@@ -50,7 +50,7 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 			inputStream = collectionData.getName().toLowerCase().endsWith(".gz") ?
 					new GZIPInputStream(new FileInputStream(collectionData), 128 * 1024 * 1024)
 					: new BufferedInputStream(new FileInputStream(collectionData), 128 * 1024 * 1024);
-			inputStream.skipNBytes(findIterable.mongoCollectionDump.work.startPosition);
+
 
 /*			while (true) {
 				try {
@@ -62,7 +62,7 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 					break;
 				}
 			}*/
-			LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " has " + count + " documents.");
+			LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " has " + count + " documents (skept "+findIterable.mongoCollectionDump.work.startPosition+" bytes).");
 		}
 		catch (IOException e) {
 			throw new RuntimeException(e);
@@ -100,7 +100,7 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 	public void close() {
 		try {
 			if (inputStream != null) {
-				LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " closing inputStream.");
+				//LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " closing inputStream.");
 				inputStream.close();
 			}
 		}
@@ -132,7 +132,6 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 			/*if (current % 10000 == 0) {
 				LOGGER.info("cursor created " + current + " documents");
 			}*/
-			LOGGER.info("Returning batch of "+results.size()+" RawBsonDocument");
 
 			return results;
 		}
