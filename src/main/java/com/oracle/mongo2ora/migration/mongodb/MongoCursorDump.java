@@ -132,6 +132,7 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 			/*if (current % 10000 == 0) {
 				LOGGER.info("cursor created " + current + " documents");
 			}*/
+			LOGGER.info("Returning batch of "+results.size()+" RawBsonDocument");
 
 			return results;
 		}
