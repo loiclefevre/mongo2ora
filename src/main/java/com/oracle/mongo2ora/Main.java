@@ -156,6 +156,7 @@ public class Main {
 	}
 
 	static long position = 0;
+	static long previousPosition = 0;
 	private static void skipNextBSONRawData(InputStream input) throws IOException {
 		int readBytes = input.read(bsonDataSize, 0, 4);
 		if (readBytes != 4) throw new EOFException();
@@ -165,6 +166,7 @@ public class Main {
 				((bsonDataSize[2] & 0xff) << 16) |
 				((bsonDataSize[3] & 0xff) << 24);
 
+		previousPosition = position;
 		position += bsonSize;
 
 		long skeptBytes;
@@ -469,12 +471,25 @@ public class Main {
 								skipNextBSONRawData(inputStream);
 								clusterCount++;
 
-								if(clusterCount == 100000) {
-									count += clusterCount;
-									publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
-									clusterStartPosition = position;
-									LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
-									clusterCount = 0;
+								// limit cluster size to 100,000 documents or 2 GB
+								boolean sizeOverFlow=false;
+								if((sizeOverFlow= (position - clusterStartPosition) > 2048L*1024L*1024L) || clusterCount == 100000) {
+									if(sizeOverFlow) {
+										clusterCount--;
+										count += clusterCount;
+										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
+										LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+										clusterCount = 1;
+										clusterStartPosition = previousPosition;
+										gui.updateSourceDatabaseDocuments(count, count == 0 ? 0 : (long)((double)previousPosition/(double)count));
+									} else {
+										count += clusterCount;
+										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
+										LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+										clusterCount = 0;
+										clusterStartPosition = position;
+										gui.updateSourceDatabaseDocuments(count, count == 0 ? 0 : (long)((double)position/(double)count));
+									}
 								}
 
 							} catch (EOFException eof) {
@@ -483,6 +498,7 @@ public class Main {
 						}
 
 						if( clusterCount > 0 ) {
+							boolean sizeOverFlow= (position - clusterStartPosition) > 2048L*1024L*1024L;
 							count += clusterCount;
 							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
 							LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");

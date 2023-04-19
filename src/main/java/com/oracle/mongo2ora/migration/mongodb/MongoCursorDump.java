@@ -11,8 +11,12 @@ import java.io.BufferedInputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.GZIPInputStream;
@@ -32,6 +36,15 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 			collectionData = new File(findIterable.mongoCollectionDump.sourceDumpFolder, findIterable.mongoCollectionDump.name + ".bson.gz");
 			if (!collectionData.exists()) return;
 		}
+
+		/*try {
+			RandomAccessFile file = new RandomAccessFile(collectionData,"r");
+			FileChannel fileChannel = file.getChannel();
+			MappedByteBuffer buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileChannel.size());
+		}
+		catch (FileNotFoundException e) {
+			throw new RuntimeException(e);
+		}*/
 
 		try {
 			inputStream = collectionData.getName().toLowerCase().endsWith(".gz") ?
