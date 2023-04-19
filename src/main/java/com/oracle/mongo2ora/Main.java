@@ -473,7 +473,7 @@ public class Main {
 
 								// limit cluster size to 100,000 documents or 2 GB
 								boolean sizeOverFlow=false;
-								if((sizeOverFlow= (position - clusterStartPosition) > 2048L*1024L*1024L) || clusterCount == 100000) {
+								if((sizeOverFlow= ((position - clusterStartPosition) > 2048L*1024L*1024L)) || clusterCount == 100000) {
 									if(sizeOverFlow) {
 										clusterCount--;
 										count += clusterCount;
@@ -486,9 +486,9 @@ public class Main {
 										count += clusterCount;
 										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
 										LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+										gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(position-clusterStartPosition)/(double)clusterCount));
 										clusterCount = 0;
 										clusterStartPosition = position;
-										gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(position-clusterStartPosition)/(double)clusterCount));
 									}
 								}
 
@@ -498,7 +498,7 @@ public class Main {
 						}
 
 						if( clusterCount > 0 ) {
-							boolean sizeOverFlow= (position - clusterStartPosition) > 2048L*1024L*1024L;
+							final boolean sizeOverFlow= (position - clusterStartPosition) > 2048L*1024L*1024L;
 							count += clusterCount;
 							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
 							LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
