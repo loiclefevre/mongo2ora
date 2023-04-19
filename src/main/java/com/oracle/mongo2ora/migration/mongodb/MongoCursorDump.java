@@ -59,9 +59,9 @@ public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
 		}
 	}
 
-	private final static byte[] bsonDataSize = new byte[4];
+	private final byte[] bsonDataSize = new byte[4];
 
-	private static byte[] readNextBSONRawData(InputStream input) throws IOException {
+	private byte[] readNextBSONRawData(InputStream input) throws IOException {
 		int readBytes = input.read(bsonDataSize, 0, 4);
 		if (readBytes != 4) throw new EOFException();
 
@@ -114,7 +114,7 @@ public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
 				LOGGER.info("cursor created "+current+" documents");
 			}
 
-			return (TResult)new RawBsonDocument(data);
+			return (TResult)new RawBsonDocument(data,0,data.length);
 		}
 		catch (IOException eof) {
 		}
