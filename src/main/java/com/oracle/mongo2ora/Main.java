@@ -457,6 +457,7 @@ public class Main {
 					final File bsonFile = mongoDatabase.getBSONFile(collectionName);
 
 					long count = 0;
+					position = previousPosition = 0;
 
 					try (
 							InputStream inputStream = bsonFile.getName().toLowerCase().endsWith(".gz") ?
