@@ -51,6 +51,7 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 					new GZIPInputStream(new FileInputStream(collectionData), 128 * 1024 * 1024)
 					: new BufferedInputStream(new FileInputStream(collectionData), 128 * 1024 * 1024);
 
+			inputStream.skipNBytes(findIterable.mongoCollectionDump.work.startPosition);
 
 /*			while (true) {
 				try {
