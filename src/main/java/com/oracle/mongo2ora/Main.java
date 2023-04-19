@@ -469,7 +469,7 @@ public class Main {
 								skipNextBSONRawData(inputStream);
 								clusterCount++;
 
-								if(clusterCount == 5000000) {
+								if(clusterCount == 100000) {
 									count += clusterCount;
 									publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
 									clusterStartPosition = position;
