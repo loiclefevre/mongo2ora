@@ -7,11 +7,8 @@ import com.mongodb.diagnostics.logging.Loggers;
 import com.mongodb.internal.operation.BatchCursor;
 import org.bson.RawBsonDocument;
 
-import java.io.BufferedInputStream;
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
@@ -19,14 +16,16 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.zip.GZIPInputStream;
 
 public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 	private static final Logger LOGGER = Loggers.getLogger("MongoCursorDump");
 	public final FindIterableDump<TResult> findIterable;
 	public final long count;
 	public long current;
-	public InputStream inputStream;
+	//public InputStream inputStream;
+	public RandomAccessFile file;
+	public FileChannel fileChannel;
+	public MappedByteBuffer buffer;
 
 	public MongoCursorDump(FindIterableDump<TResult> findIterable) {
 		this.findIterable = findIterable;
@@ -37,38 +36,29 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 			if (!collectionData.exists()) return;
 		}
 
-		/*try {
-			RandomAccessFile file = new RandomAccessFile(collectionData,"r");
-			FileChannel fileChannel = file.getChannel();
-			MappedByteBuffer buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileChannel.size());
-		}
-		catch (FileNotFoundException e) {
-			throw new RuntimeException(e);
-		}*/
-
+		// https://howtodoinjava.com/java/nio/memory-mapped-files-mappedbytebuffer/#:~:text=2.-,Java%20Memory%2DMapped%20Files,as%20a%20very%20large%20array.
 		try {
+			LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " has " + count + " documents (skept "+findIterable.mongoCollectionDump.work.startPosition+" bytes, map "+findIterable.mongoCollectionDump.work.rawSize+" bytes in RAM).");
+			file = new RandomAccessFile(collectionData, "r");
+			fileChannel = file.getChannel();
+			buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, findIterable.mongoCollectionDump.work.startPosition, findIterable.mongoCollectionDump.work.rawSize);
+		}
+		catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+
+/*		try {
 			inputStream = collectionData.getName().toLowerCase().endsWith(".gz") ?
 					new GZIPInputStream(new FileInputStream(collectionData), 128 * 1024 * 1024)
 					: new BufferedInputStream(new FileInputStream(collectionData), 128 * 1024 * 1024);
 
 			inputStream.skipNBytes(findIterable.mongoCollectionDump.work.startPosition);
-// https://howtodoinjava.com/java/nio/memory-mapped-files-mappedbytebuffer/#:~:text=2.-,Java%20Memory%2DMapped%20Files,as%20a%20very%20large%20array.
 
-/*			while (true) {
-				try {
-					//final byte[] data = readNextBSONRawData(inputStream);
-					skipNextBSONRawData(inputStream);
-					current++;
-
-				} catch (EOFException eof) {
-					break;
-				}
-			}*/
-			//LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " has " + count + " documents (skept "+findIterable.mongoCollectionDump.work.startPosition+" bytes).");
+			LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " has " + count + " documents (skept "+findIterable.mongoCollectionDump.work.startPosition+" bytes).");
 		}
 		catch (IOException e) {
 			throw new RuntimeException(e);
-		}
+		}*/
 	}
 
 	private final byte[] bsonDataSize = new byte[4];
@@ -98,12 +88,40 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 		return rawData;
 	}
 
+	private byte[] readNextBSONRawData() throws IOException {
+		if (buffer.remaining() < 4) throw new EOFException();
+		buffer.get(bsonDataSize, 0, 4);
+
+		final int bsonSize = (bsonDataSize[0] & 0xff) |
+				((bsonDataSize[1] & 0xff) << 8) |
+				((bsonDataSize[2] & 0xff) << 16) |
+				((bsonDataSize[3] & 0xff) << 24);
+
+		final byte[] rawData = new byte[bsonSize];
+
+		System.arraycopy(bsonDataSize, 0, rawData, 0, 4);
+
+		final int remainingBytesToRead = bsonSize - 4;
+		if (buffer.remaining() < remainingBytesToRead)
+			throw new EOFException();
+		buffer.get(rawData, 4, remainingBytesToRead);
+
+		return rawData;
+	}
+
 	@Override
 	public void close() {
 		try {
+			/*
 			if (inputStream != null) {
 				//LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " closing inputStream.");
 				inputStream.close();
+			}*/
+			if (fileChannel != null) {
+				fileChannel.close();
+			}
+			if (file != null) {
+				file.close();
 			}
 		}
 		catch (IOException e) {
@@ -117,16 +135,17 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 	}
 
 	private final List<TResult> EMPTY_LIST = new ArrayList<>();
+
 	@Override
 	public List<TResult> next() {
 		try {
 			final List<TResult> results = new ArrayList<>(getBatchSize());
 
 			int i = 0;
-			while(hasNext() && i < getBatchSize()) {
+			while (hasNext() && i < getBatchSize()) {
 				current++;
-				final byte[] data = readNextBSONRawData(inputStream);
-				results.add((TResult)new RawBsonDocument(data, 0, data.length));
+				final byte[] data = readNextBSONRawData();
+				results.add((TResult) new RawBsonDocument(data, 0, data.length));
 				i++;
 			}
 

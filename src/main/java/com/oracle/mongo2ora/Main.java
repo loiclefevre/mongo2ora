@@ -478,14 +478,14 @@ public class Main {
 									if(sizeOverFlow) {
 										clusterCount--;
 										count += clusterCount;
-										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
+										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition,(int)(previousPosition-clusterStartPosition)));
 										LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 										gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(previousPosition-clusterStartPosition)/(double)clusterCount));
 										clusterCount = 1;
 										clusterStartPosition = previousPosition;
 									} else {
 										count += clusterCount;
-										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
+										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition,(int)(position-clusterStartPosition)));
 										LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 										gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(position-clusterStartPosition)/(double)clusterCount));
 										clusterCount = 0;
@@ -501,7 +501,7 @@ public class Main {
 						if( clusterCount > 0 ) {
 							final boolean sizeOverFlow= (position - clusterStartPosition) > 2048L*1024L*1024L;
 							count += clusterCount;
-							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
+							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition,(int)(position-clusterStartPosition)));
 							LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 							gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(position-clusterStartPosition)/(double)clusterCount));
 						}

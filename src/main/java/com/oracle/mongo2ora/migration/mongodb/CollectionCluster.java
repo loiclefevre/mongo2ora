@@ -16,10 +16,12 @@ public class CollectionCluster {
 	}
 
 	public long startPosition;
+	public int rawSize;
 
-	public CollectionCluster(long count, long startPosition) {
+	public CollectionCluster(long count, long startPosition, int rawSize) {
 		this.count = count;
 		this.startPosition = startPosition;
 		this.sourceDump = true;
+		this.rawSize = rawSize;
 	}
 }
