@@ -479,16 +479,16 @@ public class Main {
 										count += clusterCount;
 										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
 										LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+										gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(previousPosition-clusterStartPosition)/(double)clusterCount));
 										clusterCount = 1;
 										clusterStartPosition = previousPosition;
-										gui.updateSourceDatabaseDocuments(count, count == 0 ? 0 : (long)((double)previousPosition/(double)count));
 									} else {
 										count += clusterCount;
 										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
 										LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 										clusterCount = 0;
 										clusterStartPosition = position;
-										gui.updateSourceDatabaseDocuments(count, count == 0 ? 0 : (long)((double)position/(double)count));
+										gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(position-clusterStartPosition)/(double)clusterCount));
 									}
 								}
 
@@ -502,11 +502,8 @@ public class Main {
 							count += clusterCount;
 							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
 							LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+							gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(position-clusterStartPosition)/(double)clusterCount));
 						}
-
-
-						gui.updateSourceDatabaseDocuments(count, count == 0 ? 0 : (long)((double)position/(double)count));
-
 					}
 
 					LOGGER.info("Collection "+collectionName+" has "+count+" JSON document(s).");
