@@ -6,6 +6,7 @@ import com.mongodb.Function;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoIterable;
+import com.mongodb.client.internal.MongoBatchCursorAdapter;
 import com.mongodb.client.model.Collation;
 import org.bson.BsonValue;
 import org.bson.Document;
@@ -78,7 +79,7 @@ public class FindIterableDump<TDocument> implements FindIterable<TDocument>  {
 
 	@Override
 	public MongoCursor<TDocument> iterator() {
-		return new MongoCursorDump<>(this);
+		return new MongoBatchCursorAdapter(new MongoCursorDump<>(this));
 	}
 
 	@Override

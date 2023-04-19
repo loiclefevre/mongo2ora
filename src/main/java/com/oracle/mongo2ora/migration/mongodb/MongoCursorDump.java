@@ -2,9 +2,9 @@ package com.oracle.mongo2ora.migration.mongodb;
 
 import com.mongodb.ServerAddress;
 import com.mongodb.ServerCursor;
-import com.mongodb.client.MongoCursor;
 import com.mongodb.diagnostics.logging.Logger;
 import com.mongodb.diagnostics.logging.Loggers;
+import com.mongodb.internal.operation.BatchCursor;
 import org.bson.RawBsonDocument;
 
 import java.io.BufferedInputStream;
@@ -13,9 +13,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.GZIPInputStream;
 
-public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
+public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 	private static final Logger LOGGER = Loggers.getLogger("MongoCursorDump");
 	public final FindIterableDump<TResult> findIterable;
 	public final long count;
@@ -99,22 +101,31 @@ public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
 		return current < count;
 	}
 
+	private final List<TResult> EMPTY_LIST = new ArrayList<>();
 	@Override
-	public TResult next() {
+	public List<TResult> next() {
 		try {
-			current++;
-			final byte[] data = readNextBSONRawData(inputStream);
+			final List<TResult> results = new ArrayList<>(getBatchSize());
 
-			if (current % 10000 == 0) {
-				LOGGER.info("cursor created " + current + " documents");
+			int i = 0;
+			while(hasNext() && i < getBatchSize()) {
+				current++;
+				final byte[] data = readNextBSONRawData(inputStream);
+				results.add((TResult)new RawBsonDocument(data, 0, data.length));
+				i++;
 			}
 
-			return (TResult) new RawBsonDocument(data, 0, data.length);
+
+			/*if (current % 10000 == 0) {
+				LOGGER.info("cursor created " + current + " documents");
+			}*/
+
+			return results;
 		}
 		catch (IOException eof) {
 		}
 
-		return null;
+		return EMPTY_LIST;
 	}
 
 	@Override
@@ -123,7 +134,17 @@ public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
 	}
 
 	@Override
-	public TResult tryNext() {
+	public void setBatchSize(int i) {
+
+	}
+
+	@Override
+	public int getBatchSize() {
+		return 2048;
+	}
+
+	@Override
+	public List<TResult> tryNext() {
 		return null;
 	}
 
