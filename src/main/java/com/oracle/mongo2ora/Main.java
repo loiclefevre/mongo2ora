@@ -358,7 +358,7 @@ public class Main {
 					throw new RuntimeException("Can't use memoptimize for write if target is not an autonomous database!");
 				}
 
-				gui.setsourceDatabaseVersion("n/a");
+				gui.setsourceDatabaseVersion("");
 
 				// get number of collections in this database
 				MONGODB_COLLECTIONS = 0;

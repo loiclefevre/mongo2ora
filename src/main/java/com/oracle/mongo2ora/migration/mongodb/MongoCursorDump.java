@@ -52,6 +52,7 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 					: new BufferedInputStream(new FileInputStream(collectionData), 128 * 1024 * 1024);
 
 			inputStream.skipNBytes(findIterable.mongoCollectionDump.work.startPosition);
+// https://howtodoinjava.com/java/nio/memory-mapped-files-mappedbytebuffer/#:~:text=2.-,Java%20Memory%2DMapped%20Files,as%20a%20very%20large%20array.
 
 /*			while (true) {
 				try {
