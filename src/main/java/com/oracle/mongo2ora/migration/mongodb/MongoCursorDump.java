@@ -64,7 +64,7 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 					break;
 				}
 			}*/
-			LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " has " + count + " documents (skept "+findIterable.mongoCollectionDump.work.startPosition+" bytes).");
+			//LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " has " + count + " documents (skept "+findIterable.mongoCollectionDump.work.startPosition+" bytes).");
 		}
 		catch (IOException e) {
 			throw new RuntimeException(e);

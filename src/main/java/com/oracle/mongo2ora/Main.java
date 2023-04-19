@@ -104,7 +104,7 @@ import static java.util.stream.Collectors.toList;
  * - help migration using properties file for per collection configuration (range partitioning, SODA collection columns, types etc..., filtering...)
  */
 public class Main {
-	public static final String VERSION = "1.1.0";
+	public static final String VERSION = "1.2.0";
 
 	private static final Logger LOGGER = Loggers.getLogger("main");
 
@@ -358,7 +358,7 @@ public class Main {
 					throw new RuntimeException("Can't use memoptimize for write if target is not an autonomous database!");
 				}
 
-				gui.setsourceDatabaseVersion("");
+				gui.setsourceDatabaseVersion("(dump)");
 
 				// get number of collections in this database
 				MONGODB_COLLECTIONS = 0;
