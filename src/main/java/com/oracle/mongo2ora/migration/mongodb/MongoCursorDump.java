@@ -11,7 +11,6 @@ import java.io.BufferedInputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.zip.GZIPInputStream;
@@ -24,16 +23,15 @@ public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
 	public InputStream inputStream;
 
 	public MongoCursorDump(FindIterableDump<TResult> findIterable) {
-		this.findIterable=findIterable;
-		this.count=findIterable.mongoCollectionDump.work.count;
-		File collectionData= new File(findIterable.mongoCollectionDump.sourceDumpFolder,findIterable.mongoCollectionDump.name+".bson");
-		if(!collectionData.exists()) {
-			collectionData= new File(findIterable.mongoCollectionDump.sourceDumpFolder,findIterable.mongoCollectionDump.name+".bson.gz");
-			if(!collectionData.exists()) return;
+		this.findIterable = findIterable;
+		this.count = findIterable.mongoCollectionDump.work.count;
+		File collectionData = new File(findIterable.mongoCollectionDump.sourceDumpFolder, findIterable.mongoCollectionDump.name + ".bson");
+		if (!collectionData.exists()) {
+			collectionData = new File(findIterable.mongoCollectionDump.sourceDumpFolder, findIterable.mongoCollectionDump.name + ".bson.gz");
+			if (!collectionData.exists()) return;
 		}
 
-		try
-		{
+		try {
 			inputStream = collectionData.getName().toLowerCase().endsWith(".gz") ?
 					new GZIPInputStream(new FileInputStream(collectionData), 128 * 1024 * 1024)
 					: new BufferedInputStream(new FileInputStream(collectionData), 128 * 1024 * 1024);
@@ -49,10 +47,7 @@ public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
 					break;
 				}
 			}*/
-			LOGGER.info("Collection " +findIterable.mongoCollectionDump.name+" has "+count+" documents.");
-		}
-		catch (FileNotFoundException e) {
-			throw new RuntimeException(e);
+			LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " has " + count + " documents.");
 		}
 		catch (IOException e) {
 			throw new RuntimeException(e);
@@ -89,8 +84,8 @@ public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
 	@Override
 	public void close() {
 		try {
-			if(inputStream != null) {
-				LOGGER.info("Collection " +findIterable.mongoCollectionDump.name+" closing inputStream.");
+			if (inputStream != null) {
+				LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " closing inputStream.");
 				inputStream.close();
 			}
 		}
@@ -110,11 +105,11 @@ public class MongoCursorDump<TResult> implements MongoCursor<TResult> {
 			current++;
 			final byte[] data = readNextBSONRawData(inputStream);
 
-			if(current % 10000 == 0) {
-				LOGGER.info("cursor created "+current+" documents");
+			if (current % 10000 == 0) {
+				LOGGER.info("cursor created " + current + " documents");
 			}
 
-			return (TResult)new RawBsonDocument(data,0,data.length);
+			return (TResult) new RawBsonDocument(data, 0, data.length);
 		}
 		catch (IOException eof) {
 		}

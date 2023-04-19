@@ -487,6 +487,10 @@ public class Main {
 							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition));
 							LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 						}
+
+
+						gui.updateSourceDatabaseDocuments(count, count == 0 ? 0 : (long)((double)position/(double)count));
+
 					}
 
 					LOGGER.info("Collection "+collectionName+" has "+count+" JSON document(s).");
