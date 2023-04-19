@@ -144,6 +144,7 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 
 	@Override
 	public int available() {
+		LOGGER.warn(">>>>>>>>>>>>    available");
 		return 0;
 	}
 
@@ -159,16 +160,19 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 
 	@Override
 	public List<TResult> tryNext() {
+		LOGGER.warn(">>>>>>>>>>>>    tryNext");
 		return null;
 	}
 
 	@Override
 	public ServerCursor getServerCursor() {
+		LOGGER.warn(">>>>>>>>>>>>    getServerCursor");
 		return null;
 	}
 
 	@Override
 	public ServerAddress getServerAddress() {
+		LOGGER.warn(">>>>>>>>>>>>    getServerAddress");
 		return null;
 	}
 }
