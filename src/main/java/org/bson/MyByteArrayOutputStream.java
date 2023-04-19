@@ -163,7 +163,8 @@ public final class MyByteArrayOutputStream extends OutputStream {
 	 * @see java.io.ByteArrayOutputStream#size()
 	 */
 	public byte[] toByteArray() {
-		return buf;
+		return Arrays.copyOf(buf, count);
+		//return buf;
 	}
 
 	/**
