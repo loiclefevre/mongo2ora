@@ -36,7 +36,9 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 	private final int batchSize;
 	private final String collectionName;
 
-	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE) {
+	private final boolean mongoDBAPICompatible;
+
+	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
 		this.work = work;
@@ -46,6 +48,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 		this.gui = gui;
 		this.batchSize = batchSize;
 		this.DB_SEMAPHORE = DB_SEMAPHORE;
+		this.mongoDBAPICompatible = mongoDBAPICompatible;
 	}
 
 	@Override
@@ -75,8 +78,8 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
                     }
                     */
 
-				if(work.sourceDump) {
-					((MongoCollectionDump<RawBsonDocument>)collection).setWork(work);
+				if (work.sourceDump) {
+					((MongoCollectionDump<RawBsonDocument>) collection).setWork(work);
 				}
 
 				final OracleConnection realConnection = (OracleConnection) c;
@@ -94,7 +97,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 
 					final byte[] version = "1".getBytes();
 
-					try (DPRowBinder2 p = new DPRowBinder2( c, pds.getUser().toUpperCase(), collectionName, null, new String[]{"ID", "VERSION", "JSON_DOCUMENT"} /* String.format("p%d", partitionId),*/)) {
+					try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), collectionName, null, new String[]{"ID", "VERSION", mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT"} /* String.format("p%d", partitionId),*/)) {
 						final MyBSONDecoder decoder = new MyBSONDecoder(true);
 
 						while (cursor.hasNext()) {
@@ -102,7 +105,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 							decoder.convertBSONToOSON(doc);
 							bsonLength += decoder.getBsonLength();
 
-							final byte[] osonData= decoder.getOSONData();
+							final byte[] osonData = decoder.getOSONData();
 							osonLength += osonData.length;
 
 							p.beginNew();

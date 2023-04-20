@@ -7,6 +7,7 @@ import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import oracle.soda.OracleCollection;
 import oracle.soda.OracleDatabase;
+import oracle.soda.OracleDocument;
 import oracle.soda.OracleException;
 import oracle.soda.rdbms.OracleRDBMSClient;
 import oracle.ucp.jdbc.PoolDataSource;
@@ -48,7 +49,7 @@ public class OracleCollectionInfo {
 
 
 	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection,
-																	 boolean autonomousDatabase, boolean useMemoptimizeForWrite) throws SQLException, OracleException {
+																	 boolean autonomousDatabase, boolean useMemoptimizeForWrite, boolean mongoDBAPICompatible) throws SQLException, OracleException {
 		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName, autonomousDatabase);
 
 		try (Connection c = adminPDS.getConnection()) {
@@ -71,13 +72,32 @@ public class OracleCollectionInfo {
 				ret.emptyDestinationCollection = true;
 
 				if (sodaCollection == null) {
-					LOGGER.info("SODA collection does not exist => creating it");
-					sodaCollection = db.admin().createCollection(collectionName);
+					LOGGER.info((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does not exist => creating it");
+					sodaCollection = mongoDBAPICompatible ? db.admin().createCollection(collectionName, db.createDocumentFromString("{\n" +
+							"      \"contentColumn\" : {\n" +
+							"        \"name\" : \"DATA\"\n" +
+							"      },\n" +
+							"      \"keyColumn\" : {\n" +
+							"       \"name\" : \"ID\",\n" +
+							"       \"assignmentMethod\" : \"EMBEDDED_OID\",\n" +
+							"       \"path\" : \"_id\"\n" +
+							"     },\n" +
+							"     \"versionColumn\" : {\n" +
+							"        \"name\" : \"VERSION\",\n" +
+							"        \"method\" : \"UUID\"\n" +
+							"     },\n" +
+							"     \"lastModifiedColumn\" : {\n" +
+							"        \"name\" : \"LAST_MODIFIED\"\n" +
+							"     },\n" +
+							"     \"creationTimeColumn\" : {\n" +
+							"        \"name\" : \"CREATED_ON\"\n" +
+							"     }\n" +
+							"   }")) : db.admin().createCollection(collectionName);
 					if (sodaCollection == null) {
-						throw new IllegalStateException("Can't create SODA collection: " + collectionName);
+						throw new IllegalStateException("Can't create "+(mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection: " + collectionName);
 					}
 					if(useMemoptimizeForWrite) {
-						configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName);
+						configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName,mongoDBAPICompatible);
 					}
 				}
 				else {
@@ -86,15 +106,38 @@ public class OracleCollectionInfo {
 							if (r.next() && r.getInt(1) == 1) {
 								// THERE IS AT LEAST ONE ROW!
 								if (dropAlreadyExistingCollection) {
-									LOGGER.warn("SODA collection does exist => dropping it (requested with --drop CLI argument)");
+									LOGGER.warn((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does exist => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
-									LOGGER.info("SODA collection does exist => re-creating it");
-									sodaCollection = db.admin().createCollection(collectionName);
+									LOGGER.info((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does exist => re-creating it");
+									// TODO manage contentColumn data type:
+									// TODO 21c+ => JSON
+									// TODO 19c => BLOB if not autonomous database and not mongodb api compatible
+									// TODO 19c => BLOB OSON if autonomous database or not mongodb api compatible
+									sodaCollection = mongoDBAPICompatible ? db.admin().createCollection(collectionName, db.createDocumentFromString("{\n" +
+											"      \"contentColumn\" : {\n" +
+											"        \"name\" : \"DATA\"\n" +
+											"      },\n" +
+											"      \"keyColumn\" : {\n" +
+											"       \"name\" : \"ID\",\n" +
+											"       \"assignmentMethod\" : \"EMBEDDED_OID\",\n" +
+											"       \"path\" : \"_id\"\n" +
+											"     },\n" +
+											"     \"versionColumn\" : {\n" +
+											"        \"name\" : \"VERSION\",\n" +
+											"        \"method\" : \"UUID\"\n" +
+											"     },\n" +
+											"     \"lastModifiedColumn\" : {\n" +
+											"        \"name\" : \"LAST_MODIFIED\"\n" +
+											"     },\n" +
+											"     \"creationTimeColumn\" : {\n" +
+											"        \"name\" : \"CREATED_ON\"\n" +
+											"     }\n" +
+											"   }")) : db.admin().createCollection(collectionName);
 									if (sodaCollection == null) {
-										throw new IllegalStateException("Can't re-create SODA collection: " + collectionName);
+										throw new IllegalStateException("Can't re-create "+(mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection: " + collectionName);
 									}
 									if(useMemoptimizeForWrite) {
-										configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName);
+										configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName, mongoDBAPICompatible);
 									}
 								}
 								else {
@@ -105,15 +148,15 @@ public class OracleCollectionInfo {
 							}
 							else {
 								if (dropAlreadyExistingCollection) {
-									LOGGER.warn("SODA collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
+									LOGGER.warn((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
-									LOGGER.info("SODA collection does exist => re-creating it");
+									LOGGER.info((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does exist => re-creating it");
 									sodaCollection = db.admin().createCollection(collectionName);
 									if (sodaCollection == null) {
-										throw new IllegalStateException("Can't re-create SODA collection: " + collectionName);
+										throw new IllegalStateException("Can't re-create "+(mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection: " + collectionName);
 									}
 									if(useMemoptimizeForWrite) {
-										configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName);
+										configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName, mongoDBAPICompatible);
 									}
 								}
 							}
@@ -183,8 +226,8 @@ public class OracleCollectionInfo {
 		return ret;
 	}
 
-	private static void configureSODACollectionForMemoptimizeForWrite(Connection userConnection, String collectionName) throws SQLException {
-		try (PreparedStatement p = userConnection.prepareStatement("insert into "+collectionName+"(ID,VERSION,JSON_DOCUMENT) values (?,?,?)")) {
+	private static void configureSODACollectionForMemoptimizeForWrite(Connection userConnection, String collectionName, boolean mongoDBAPICompatible) throws SQLException {
+		try (PreparedStatement p = userConnection.prepareStatement("insert into "+collectionName+"(ID,VERSION,"+(mongoDBAPICompatible?"DATA":"JSON_DOCUMENT")+") values (?,?,?)")) {
 			p.setString(1,"dummy");
 			p.setString(2,"dummy");
 			p.setString(3,"{}");

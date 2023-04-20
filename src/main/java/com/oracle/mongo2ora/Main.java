@@ -391,7 +391,7 @@ public class Main {
 					final long startTimeCollection = System.currentTimeMillis();
 
 					// disable is JSON constraint, remove indexes...
-					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite);
+					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
 						//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -479,14 +479,14 @@ public class Main {
 										clusterCount--;
 										count += clusterCount;
 										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition,(int)(previousPosition-clusterStartPosition)));
-										LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+										//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 										gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(previousPosition-clusterStartPosition)/(double)clusterCount));
 										clusterCount = 1;
 										clusterStartPosition = previousPosition;
 									} else {
 										count += clusterCount;
 										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition,(int)(position-clusterStartPosition)));
-										LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+										//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 										gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(position-clusterStartPosition)/(double)clusterCount));
 										clusterCount = 0;
 										clusterStartPosition = position;
@@ -502,7 +502,7 @@ public class Main {
 							final boolean sizeOverFlow= (position - clusterStartPosition) > 2048L*1024L*1024L;
 							count += clusterCount;
 							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition,(int)(position-clusterStartPosition)));
-							LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+							//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 							gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(position-clusterStartPosition)/(double)clusterCount));
 						}
 					}
@@ -559,7 +559,7 @@ public class Main {
 								workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 							}
 							else {
-*/								workerThreadPool.execute(AUTONOMOUS_DATABASE ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE) :
+*/								workerThreadPool.execute(AUTONOMOUS_DATABASE || conf.mongodbAPICompatible ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
 										new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 /*							}
 */
@@ -701,7 +701,7 @@ public class Main {
 					final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collectionName);
 
 					// disable is JSON constraint, remove indexes...
-					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite);
+					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
 						//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -811,7 +811,7 @@ public class Main {
 								workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 							}
 							else {
-								workerThreadPool.execute(AUTONOMOUS_DATABASE ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE) :
+								workerThreadPool.execute(AUTONOMOUS_DATABASE ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
 										new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 							}
 
