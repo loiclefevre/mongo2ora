@@ -13,11 +13,13 @@ import oracle.soda.rdbms.OracleRDBMSClient;
 import oracle.ucp.jdbc.PoolDataSource;
 import org.bson.Document;
 
+import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
@@ -73,26 +75,7 @@ public class OracleCollectionInfo {
 
 				if (sodaCollection == null) {
 					LOGGER.info((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does not exist => creating it");
-					sodaCollection = mongoDBAPICompatible ? db.admin().createCollection(collectionName, db.createDocumentFromString("{\n" +
-							"      \"contentColumn\" : {\n" +
-							"        \"name\" : \"DATA\"\n" +
-							"      },\n" +
-							"      \"keyColumn\" : {\n" +
-							"       \"name\" : \"ID\",\n" +
-							"       \"assignmentMethod\" : \"EMBEDDED_OID\",\n" +
-							"       \"path\" : \"_id\"\n" +
-							"     },\n" +
-							"     \"versionColumn\" : {\n" +
-							"        \"name\" : \"VERSION\",\n" +
-							"        \"method\" : \"UUID\"\n" +
-							"     },\n" +
-							"     \"lastModifiedColumn\" : {\n" +
-							"        \"name\" : \"LAST_MODIFIED\"\n" +
-							"     },\n" +
-							"     \"creationTimeColumn\" : {\n" +
-							"        \"name\" : \"CREATED_ON\"\n" +
-							"     }\n" +
-							"   }")) : db.admin().createCollection(collectionName);
+					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection( db, collectionName ) : db.admin().createCollection(collectionName);
 					if (sodaCollection == null) {
 						throw new IllegalStateException("Can't create "+(mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection: " + collectionName);
 					}
@@ -113,26 +96,7 @@ public class OracleCollectionInfo {
 									// TODO 21c+ => JSON
 									// TODO 19c => BLOB if not autonomous database and not mongodb api compatible
 									// TODO 19c => BLOB OSON if autonomous database or not mongodb api compatible
-									sodaCollection = mongoDBAPICompatible ? db.admin().createCollection(collectionName, db.createDocumentFromString("{\n" +
-											"      \"contentColumn\" : {\n" +
-											"        \"name\" : \"DATA\"\n" +
-											"      },\n" +
-											"      \"keyColumn\" : {\n" +
-											"       \"name\" : \"ID\",\n" +
-											"       \"assignmentMethod\" : \"EMBEDDED_OID\",\n" +
-											"       \"path\" : \"_id\"\n" +
-											"     },\n" +
-											"     \"versionColumn\" : {\n" +
-											"        \"name\" : \"VERSION\",\n" +
-											"        \"method\" : \"UUID\"\n" +
-											"     },\n" +
-											"     \"lastModifiedColumn\" : {\n" +
-											"        \"name\" : \"LAST_MODIFIED\"\n" +
-											"     },\n" +
-											"     \"creationTimeColumn\" : {\n" +
-											"        \"name\" : \"CREATED_ON\"\n" +
-											"     }\n" +
-											"   }")) : db.admin().createCollection(collectionName);
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection( db, collectionName ) : db.admin().createCollection(collectionName);
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create "+(mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection: " + collectionName);
 									}
@@ -224,6 +188,76 @@ public class OracleCollectionInfo {
 		}
 
 		return ret;
+	}
+
+	private static OracleCollection createMongoDBAPICompatibleCollection(OracleDatabase db, String collectionName) throws SQLException, OracleException {
+		try( Connection c = db.admin().getConnection() ) {
+			/*
+			declare
+  metadata VARCHAR2(4000) :=
+          '{
+      "contentColumn" : {
+        "name" : "DATA"
+      },
+      "keyColumn" : {
+       "name" : "ID",
+       "assignmentMethod" : "EMBEDDED_OID",
+      "path" : "_id"
+     },
+     "versionColumn" : {
+        "name" : "VERSION",
+        "method" : "UUID"
+     },
+     "lastModifiedColumn" : {
+        "name" : "LAST_MODIFIED"
+     },
+     "creationTimeColumn" : {
+        "name" : "CREATED_ON"
+     }
+   }';
+   create_time varchar2(255);
+begin
+  DBMS_SODA_ADMIN.CREATE_COLLECTION(
+                   P_URI_NAME    => 'mycollection',
+                   P_CREATE_MODE => 'NEW',
+                   P_DESCRIPTOR  => metadata,
+                   P_CREATE_TIME => create_time);
+end;
+
+/
+			 */
+			try (CallableStatement cs = c.prepareCall("{DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?); }")) {
+				final String metadata = """
+						{
+						    "contentColumn" : {
+						      "name" : "DATA"
+						    },
+						    "keyColumn" : {
+						       "name" : "ID",
+						       "assignmentMethod" : "EMBEDDED_OID",
+						      "path" : "_id"
+						    },
+						    "versionColumn" : {
+						        "name" : "VERSION",
+						        "method" : "UUID"
+						    },
+						    "lastModifiedColumn" : {
+						        "name" : "LAST_MODIFIED"
+						    },
+						    "creationTimeColumn" : {
+						        "name" : "CREATED_ON"
+						    }
+						}""";
+
+				cs.registerOutParameter(3, Types.VARCHAR);
+				cs.setString(1,collectionName);
+				cs.setString(2, metadata);
+
+				cs.execute();
+			}
+		}
+
+		return db.openCollection(collectionName);
 	}
 
 	private static void configureSODACollectionForMemoptimizeForWrite(Connection userConnection, String collectionName, boolean mongoDBAPICompatible) throws SQLException {
