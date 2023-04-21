@@ -184,6 +184,11 @@
             <version>2.1.1</version>
         </dependency>
         <dependency>
+            <groupId>org.eclipse.parsson</groupId>
+            <artifactId>parsson</artifactId>
+            <version>1.1.1</version>
+        </dependency>
+        <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jdk8</artifactId>
             <version>2.14.2</version>
