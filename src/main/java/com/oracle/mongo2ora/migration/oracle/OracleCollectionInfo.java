@@ -251,7 +251,7 @@ public class OracleCollectionInfo {
 	 * @param mongoCollection
 	 * @throws SQLException
 	 */
-	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, int maxParallelDegree, ASCIIGUI gui) throws SQLException, OracleException {
+	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, int maxParallelDegree, ASCIIGUI gui, boolean mongoDBAPICompatible) throws SQLException, OracleException {
 		try (Connection c = mediumPDS.getConnection()) {
 			try (Statement s = c.createStatement()) {
 				LOGGER.info("Enabling JSON constraint...");
@@ -261,7 +261,7 @@ public class OracleCollectionInfo {
 				}
 				else {
 					LOGGER.info("Creating Is JSON constraint NOVALIDATE");
-					s.execute("alter table " + collectionName + " add constraint " + collectionName + "_jd_is_json check (json_document is json format oson (size limit 32m)) novalidate");
+					s.execute("alter table " + collectionName + " add constraint " + collectionName + "_jd_is_json check ("+(mongoDBAPICompatible?"data":"json_document")+" is json format oson (size limit 32m)) novalidate");
 				}
 				LOGGER.info("OK");
 
@@ -390,7 +390,7 @@ public class OracleCollectionInfo {
 
 									final String SQLStatement = String.format(
 											"create index %s on %s " +
-													"(JSON_VALUE(JSON_DOCUMENT, '$.%s' returning SDO_GEOMETRY ERROR ON ERROR NULL ON EMPTY)) " +
+													"(JSON_VALUE("+(mongoDBAPICompatible?"DATA":"JSON_DOCUMENT")+", '$.%s' returning SDO_GEOMETRY ERROR ON ERROR NULL ON EMPTY)) " +
 													"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getString("name"), collectionName, spatialColumn);
 
 									LOGGER.info(SQLStatement);
@@ -425,7 +425,7 @@ public class OracleCollectionInfo {
 
 							start = System.currentTimeMillis();
 							gui.startIndex("search_index");
-							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (json_document) FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
+							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s ("+(mongoDBAPICompatible?"DATA":"JSON_DOCUMENT")+") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
 							LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
 							gui.endIndex("search_index");
 						}
