@@ -115,7 +115,7 @@ public class OracleCollectionInfo {
 									LOGGER.warn((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
 									LOGGER.info((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does exist => re-creating it");
-									sodaCollection = db.admin().createCollection(collectionName);
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection( db, collectionName ) : db.admin().createCollection(collectionName);
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create "+(mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection: " + collectionName);
 									}
