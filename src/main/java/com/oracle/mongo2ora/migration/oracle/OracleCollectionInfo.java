@@ -191,42 +191,7 @@ public class OracleCollectionInfo {
 	}
 
 	private static OracleCollection createMongoDBAPICompatibleCollection(OracleDatabase db, String collectionName) throws SQLException, OracleException {
-		try( Connection c = db.admin().getConnection() ) {
-			/*
-			declare
-  metadata VARCHAR2(4000) :=
-          '{
-      "contentColumn" : {
-        "name" : "DATA"
-      },
-      "keyColumn" : {
-       "name" : "ID",
-       "assignmentMethod" : "EMBEDDED_OID",
-      "path" : "_id"
-     },
-     "versionColumn" : {
-        "name" : "VERSION",
-        "method" : "UUID"
-     },
-     "lastModifiedColumn" : {
-        "name" : "LAST_MODIFIED"
-     },
-     "creationTimeColumn" : {
-        "name" : "CREATED_ON"
-     }
-   }';
-   create_time varchar2(255);
-begin
-  DBMS_SODA_ADMIN.CREATE_COLLECTION(
-                   P_URI_NAME    => 'mycollection',
-                   P_CREATE_MODE => 'NEW',
-                   P_DESCRIPTOR  => metadata,
-                   P_CREATE_TIME => create_time);
-end;
-
-/
-			 */
-			try (CallableStatement cs = c.prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
+			try (CallableStatement cs = db.admin().getConnection().prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
 				final String metadata = """
 						{
 						    "contentColumn" : {
@@ -255,7 +220,6 @@ end;
 
 				cs.execute();
 			}
-		}
 
 		return db.openCollection(collectionName);
 	}
