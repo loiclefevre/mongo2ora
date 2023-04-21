@@ -7,7 +7,6 @@ import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import oracle.soda.OracleCollection;
 import oracle.soda.OracleDatabase;
-import oracle.soda.OracleDocument;
 import oracle.soda.OracleException;
 import oracle.soda.rdbms.OracleRDBMSClient;
 import oracle.ucp.jdbc.PoolDataSource;
@@ -74,13 +73,13 @@ public class OracleCollectionInfo {
 				ret.emptyDestinationCollection = true;
 
 				if (sodaCollection == null) {
-					LOGGER.info((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does not exist => creating it");
-					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection( db, collectionName ) : db.admin().createCollection(collectionName);
+					LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does not exist => creating it");
+					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : db.admin().createCollection(collectionName);
 					if (sodaCollection == null) {
-						throw new IllegalStateException("Can't create "+(mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection: " + collectionName);
+						throw new IllegalStateException("Can't create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + collectionName);
 					}
-					if(useMemoptimizeForWrite) {
-						configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName,mongoDBAPICompatible);
+					if (useMemoptimizeForWrite) {
+						configureSODACollectionForMemoptimizeForWrite(userConnection, collectionName, mongoDBAPICompatible);
 					}
 				}
 				else {
@@ -89,19 +88,19 @@ public class OracleCollectionInfo {
 							if (r.next() && r.getInt(1) == 1) {
 								// THERE IS AT LEAST ONE ROW!
 								if (dropAlreadyExistingCollection) {
-									LOGGER.warn((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does exist => dropping it (requested with --drop CLI argument)");
+									LOGGER.warn((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
-									LOGGER.info((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does exist => re-creating it");
+									LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
 									// TODO manage contentColumn data type:
 									// TODO 21c+ => JSON
 									// TODO 19c => BLOB if not autonomous database and not mongodb api compatible
 									// TODO 19c => BLOB OSON if autonomous database or not mongodb api compatible
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection( db, collectionName ) : db.admin().createCollection(collectionName);
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : db.admin().createCollection(collectionName);
 									if (sodaCollection == null) {
-										throw new IllegalStateException("Can't re-create "+(mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection: " + collectionName);
+										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + collectionName);
 									}
-									if(useMemoptimizeForWrite) {
-										configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName, mongoDBAPICompatible);
+									if (useMemoptimizeForWrite) {
+										configureSODACollectionForMemoptimizeForWrite(userConnection, collectionName, mongoDBAPICompatible);
 									}
 								}
 								else {
@@ -112,15 +111,15 @@ public class OracleCollectionInfo {
 							}
 							else {
 								if (dropAlreadyExistingCollection) {
-									LOGGER.warn((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
+									LOGGER.warn((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
-									LOGGER.info((mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection does exist => re-creating it");
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection( db, collectionName ) : db.admin().createCollection(collectionName);
+									LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : db.admin().createCollection(collectionName);
 									if (sodaCollection == null) {
-										throw new IllegalStateException("Can't re-create "+(mongoDBAPICompatible?"MongoDB API compatible":"SODA")+" collection: " + collectionName);
+										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + collectionName);
 									}
-									if(useMemoptimizeForWrite) {
-										configureSODACollectionForMemoptimizeForWrite(userConnection,collectionName, mongoDBAPICompatible);
+									if (useMemoptimizeForWrite) {
+										configureSODACollectionForMemoptimizeForWrite(userConnection, collectionName, mongoDBAPICompatible);
 									}
 								}
 							}
@@ -149,7 +148,7 @@ public class OracleCollectionInfo {
 					while (r.next()) {
 						final String constraintText = r.getString(2);
 						final String condition = constraintText.toLowerCase();
-						if (condition.contains("is json") && condition.contains("json_document")) {
+						if (condition.contains("is json") && condition.contains(mongoDBAPICompatible?"DATA":"json_document")) {
 							ret.isJsonConstraintName = r.getString(1);
 							ret.isJsonConstraintEnabled = r.getString(3).equalsIgnoreCase("ENABLED");
 							ret.isJsonConstraintText = constraintText;
@@ -191,56 +190,56 @@ public class OracleCollectionInfo {
 	}
 
 	private static OracleCollection createMongoDBAPICompatibleCollection(OracleDatabase db, String collectionName) throws SQLException, OracleException {
-			try (CallableStatement cs = db.admin().getConnection().prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
-				final String metadata = """
-						{
-						    "contentColumn" : {
-						      "name" : "DATA"
-						    },
-						    "keyColumn" : {
-						       "name" : "ID",
-						       "assignmentMethod" : "EMBEDDED_OID",
-						      "path" : "_id"
-						    },
-						    "versionColumn" : {
-						        "name" : "VERSION",
-						        "method" : "UUID"
-						    },
-						    "lastModifiedColumn" : {
-						        "name" : "LAST_MODIFIED"
-						    },
-						    "creationTimeColumn" : {
-						        "name" : "CREATED_ON"
-						    }
-						}""";
+		try (CallableStatement cs = db.admin().getConnection().prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
+			final String metadata = """
+					{
+					    "contentColumn" : {
+					      "name" : "DATA"
+					    },
+					    "keyColumn" : {
+					       "name" : "ID",
+					       "assignmentMethod" : "EMBEDDED_OID",
+					      "path" : "_id"
+					    },
+					    "versionColumn" : {
+					        "name" : "VERSION",
+					        "method" : "UUID"
+					    },
+					    "lastModifiedColumn" : {
+					        "name" : "LAST_MODIFIED"
+					    },
+					    "creationTimeColumn" : {
+					        "name" : "CREATED_ON"
+					    }
+					}""";
 
-				cs.registerOutParameter(3, Types.VARCHAR);
-				cs.setString(1,collectionName);
-				cs.setString(2, metadata);
+			cs.registerOutParameter(3, Types.VARCHAR);
+			cs.setString(1, collectionName);
+			cs.setString(2, metadata);
 
-				cs.execute();
-			}
+			cs.execute();
+		}
 
 		return db.openCollection(collectionName);
 	}
 
 	private static void configureSODACollectionForMemoptimizeForWrite(Connection userConnection, String collectionName, boolean mongoDBAPICompatible) throws SQLException {
-		try (PreparedStatement p = userConnection.prepareStatement("insert into "+collectionName+"(ID,VERSION,"+(mongoDBAPICompatible?"DATA":"JSON_DOCUMENT")+") values (?,?,?)")) {
-			p.setString(1,"dummy");
-			p.setString(2,"dummy");
-			p.setString(3,"{}");
+		try (PreparedStatement p = userConnection.prepareStatement("insert into " + collectionName + "(ID,VERSION," + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") values (?,?,?)")) {
+			p.setString(1, "dummy");
+			p.setString(2, "dummy");
+			p.setString(3, "{}");
 			p.executeUpdate();
 			userConnection.commit();
 		}
 
-		try (PreparedStatement p = userConnection.prepareStatement("delete from "+collectionName+" where id=?")) {
-			p.setString(1,"dummy");
+		try (PreparedStatement p = userConnection.prepareStatement("delete from " + collectionName + " where id=?")) {
+			p.setString(1, "dummy");
 			p.executeUpdate();
 			userConnection.commit();
 		}
 
 		try (Statement s = userConnection.createStatement()) {
-			s.execute("alter table "+collectionName+" memoptimize for write");
+			s.execute("alter table " + collectionName + " memoptimize for write");
 		}
 	}
 
@@ -261,7 +260,7 @@ public class OracleCollectionInfo {
 				}
 				else {
 					LOGGER.info("Creating Is JSON constraint NOVALIDATE");
-					s.execute("alter table " + collectionName + " add constraint " + collectionName + "_jd_is_json check ("+(mongoDBAPICompatible?"data":"json_document")+" is json format oson (size limit 32m)) novalidate");
+					s.execute("alter table " + collectionName + " add constraint " + collectionName + "_jd_is_json check (" + (mongoDBAPICompatible ? "data" : "json_document") + " is json format oson (size limit 32m)) novalidate");
 				}
 				LOGGER.info("OK");
 
@@ -321,7 +320,7 @@ public class OracleCollectionInfo {
 				// manage other MongoDB indexes
 				int mongoDBIndex = 0;
 
-				if(mongoCollection != null) {
+				if (mongoCollection != null) {
 					for (Document indexMetadata : mongoCollection.listIndexes()) {
 						mongoDBIndex++;
 					}
@@ -390,7 +389,7 @@ public class OracleCollectionInfo {
 
 									final String SQLStatement = String.format(
 											"create index %s on %s " +
-													"(JSON_VALUE("+(mongoDBAPICompatible?"DATA":"JSON_DOCUMENT")+", '$.%s' returning SDO_GEOMETRY ERROR ON ERROR NULL ON EMPTY)) " +
+													"(JSON_VALUE(" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", '$.%s' returning SDO_GEOMETRY ERROR ON ERROR NULL ON EMPTY)) " +
 													"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getString("name"), collectionName, spatialColumn);
 
 									LOGGER.info(SQLStatement);
@@ -425,7 +424,7 @@ public class OracleCollectionInfo {
 
 							start = System.currentTimeMillis();
 							gui.startIndex("search_index");
-							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s ("+(mongoDBAPICompatible?"DATA":"JSON_DOCUMENT")+") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
+							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
 							LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
 							gui.endIndex("search_index");
 						}
