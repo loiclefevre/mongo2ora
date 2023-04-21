@@ -148,7 +148,7 @@ public class OracleCollectionInfo {
 					while (r.next()) {
 						final String constraintText = r.getString(2);
 						final String condition = constraintText.toLowerCase();
-						if (condition.contains("is json") && condition.contains(mongoDBAPICompatible?"DATA":"json_document")) {
+						if (condition.contains("is json") && condition.contains(mongoDBAPICompatible?"data":"json_document")) {
 							ret.isJsonConstraintName = r.getString(1);
 							ret.isJsonConstraintEnabled = r.getString(3).equalsIgnoreCase("ENABLED");
 							ret.isJsonConstraintText = constraintText;
