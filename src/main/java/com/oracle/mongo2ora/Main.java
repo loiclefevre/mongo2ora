@@ -585,7 +585,7 @@ public class Main {
 					}
 
 					// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
-					oracleCollectionInfo.finish(mediumPDS, null, conf.maxSQLParallelDegree, gui);
+					oracleCollectionInfo.finish(mediumPDS, null, conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible);
 					//gui.finishCollection();
 
 				}
@@ -837,7 +837,7 @@ public class Main {
 					}
 
 					// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
-					oracleCollectionInfo.finish(mediumPDS, mongoCollection, conf.maxSQLParallelDegree, gui);
+					oracleCollectionInfo.finish(mediumPDS, mongoCollection, conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible);
 					//gui.finishCollection();
 
 				}
