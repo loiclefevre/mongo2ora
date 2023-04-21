@@ -226,7 +226,7 @@ end;
 
 /
 			 */
-			try (CallableStatement cs = c.prepareCall("{DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?); }")) {
+			try (CallableStatement cs = c.prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
 				final String metadata = """
 						{
 						    "contentColumn" : {
