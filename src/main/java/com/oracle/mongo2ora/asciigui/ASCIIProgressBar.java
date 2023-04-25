@@ -82,8 +82,8 @@ public class ASCIIProgressBar {
 		// 200,53,48
 		for(int i = 0; i < width; i++) {
 			if(i <= progressBackgroundLength) {
-				term.background(TerminalOutput.Color.Green);
-				//term.write(getGradientColor(16,170,80,200,53,48,i,progressionPercentage));
+				//term.background(TerminalOutput.Color.Green);
+				term.background(getGradientColor(16,170,80,200,53,48,i,progressionPercentage));
 			} else {
 				term.defaultBackground();
 			}

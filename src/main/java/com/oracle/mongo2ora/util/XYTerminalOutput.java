@@ -49,6 +49,11 @@ public class XYTerminalOutput {
 		return this;
 	}
 
+	public XYTerminalOutput background(CharSequence s) throws NativeException {
+		term.write(s);
+		return this;
+	}
+
 	public TerminalSize getTerminalSize() {
 		return term.getTerminalSize();
 	}
