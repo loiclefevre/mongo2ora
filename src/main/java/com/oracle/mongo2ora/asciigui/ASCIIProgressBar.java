@@ -94,7 +94,7 @@ public class ASCIIProgressBar {
 			if(i < dashPosition ) {
 				//term.bold().bright().foreground(TerminalOutput.Color.White).write("["+speedString+"]");
 				if(i < dashPosition - maxSpeedString.length()) {
-					term.bold()/*.bright()*/.foreground(TerminalOutput.Color.White).write(speedString.substring(i - spacesBeforeSpeed - 1, i - spacesBeforeSpeed));
+					term.normal().bold().bright().foreground(TerminalOutput.Color.White).write(speedString.substring(i - spacesBeforeSpeed - 1, i - spacesBeforeSpeed));
 				} else {
 					term.normal().write(String.format("\u001b[38;2;%d;%d;%dm",255,203,107)).write(maxSpeedString.substring(i - spacesBeforeSpeed - 1 - speedString.length(), i - spacesBeforeSpeed - speedString.length()));
 				}
