@@ -29,6 +29,14 @@ public class MetadataIndex {
 	public MetadataIndex() {
 	}
 
+	@Override
+	public String toString() {
+		return "MetadataIndex{" +
+				"name='" + name + '\'' +
+				", unique=" + unique +
+				", key=" + key +
+				'}';
+	}
 
 	public String getName() {
 		return name;

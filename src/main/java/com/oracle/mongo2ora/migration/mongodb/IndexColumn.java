@@ -8,4 +8,12 @@ public class IndexColumn {
 		this.name = name;
 		this.asc = asc;
 	}
+
+	@Override
+	public String toString() {
+		return "IndexColumn{" +
+				"name='" + name + '\'' +
+				", asc=" + asc +
+				'}';
+	}
 }

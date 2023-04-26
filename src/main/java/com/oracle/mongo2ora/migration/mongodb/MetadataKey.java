@@ -11,4 +11,13 @@ public class MetadataKey {
 	public void addIndexColumn(String indexColumn, boolean asc) {
 		columns.add(new IndexColumn(indexColumn, asc) );
 	}
+
+	@Override
+	public String toString() {
+		return "MetadataKey{" +
+				"text=" + text +
+				", columns=" + columns +
+				", spatial=" + spatial +
+				'}';
+	}
 }
