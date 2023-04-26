@@ -5,6 +5,10 @@ import com.mongodb.client.MongoCursor;
 import com.mongodb.diagnostics.logging.Logger;
 import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
+import com.oracle.mongo2ora.migration.mongodb.IndexColumn;
+import com.oracle.mongo2ora.migration.mongodb.MetadataIndex;
+import com.oracle.mongo2ora.migration.mongodb.MetadataKey;
+import com.oracle.mongo2ora.migration.mongodb.MongoDBMetadata;
 import oracle.soda.OracleCollection;
 import oracle.soda.OracleDatabase;
 import oracle.soda.OracleException;
@@ -250,7 +254,7 @@ public class OracleCollectionInfo {
 	 * @param mongoCollection
 	 * @throws SQLException
 	 */
-	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, int maxParallelDegree, ASCIIGUI gui, boolean mongoDBAPICompatible) throws SQLException, OracleException {
+	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, MongoDBMetadata collectionMetadataDump, int maxParallelDegree, ASCIIGUI gui, boolean mongoDBAPICompatible) throws SQLException, OracleException {
 		try (Connection c = mediumPDS.getConnection()) {
 			try (Statement s = c.createStatement()) {
 				LOGGER.info("Enabling JSON constraint...");
@@ -336,7 +340,7 @@ public class OracleCollectionInfo {
 
 						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
 
-						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( json_document, dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + " where rownum <= 1000)\n" +
+						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( "+(mongoDBAPICompatible?"DATA":"JSON_DOCUMENT")+", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + " where rownum <= 1000)\n" +
 								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
 							while (r.next()) {
 								String key = r.getString(1);
@@ -409,6 +413,113 @@ public class OracleCollectionInfo {
 									sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
 									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 									gui.endIndex(indexMetadata.getString("name"));
+								}
+							}
+						}
+
+						if (needSearchIndex) {
+                    /*try (CallableStatement cs = c.prepareCall("{CALL CTX_DDL.SYNC_INDEX(idx_name => ?, memory => '512M', parallel_degree => ?, locking => CTX_DDL.LOCK_NOWAIT)}")) {
+                        cs.setString(1, collectionName + "$search_index");
+                        cs.setInt(2, maxParallelDegree);
+                        start = System.currentTimeMillis();
+                        cs.execute();
+                        System.out.println("Manual sync of Search Index done in " + getDurationSince(start));
+                    }*/
+
+							start = System.currentTimeMillis();
+							gui.startIndex("search_index");
+							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
+							LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
+							gui.endIndex("search_index");
+						}
+
+						s.execute("ALTER SESSION DISABLE PARALLEL DDL");
+						LOGGER.info("OK");
+					}
+				}
+				// MANAGE DUMP METADATA NOW
+				else if( collectionMetadataDump != null ) {
+					for (MetadataIndex indexMetadata : collectionMetadataDump.getIndexes()) {
+						mongoDBIndex++;
+					}
+
+					if (mongoDBIndex > 0) {
+						final Properties props = new Properties();
+						props.put("oracle.soda.sharedMetadataCache", "true");
+						props.put("oracle.soda.localMetadataCache", "true");
+
+						final OracleRDBMSClient cl = new OracleRDBMSClient(props);
+						final OracleDatabase db = cl.getDatabase(c);
+						final OracleCollection sodaCollection = db.openCollection(collectionName);
+
+						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
+
+						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( "+(mongoDBAPICompatible?"DATA":"JSON_DOCUMENT")+", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + " where rownum <= 1000)\n" +
+								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
+							while (r.next()) {
+								String key = r.getString(1);
+								if (!r.wasNull()) {
+									fieldsInfo.put(key, new FieldInfo(key, r.getString(2), r.getInt(3)));
+								}
+							}
+						}
+
+						boolean needSearchIndex = false;
+
+						for (MetadataIndex indexMetadata : collectionMetadataDump.getIndexes()) {
+							LOGGER.info(indexMetadata.toString());
+							if (indexMetadata.getName().contains("$**") || indexMetadata.getKey().text) {
+								needSearchIndex = true; //System.out.println("Need Search Index");
+							}
+							else if (indexMetadata.getName().equals("_id_")) {
+								// skipping primary key as it already exists now!
+								continue;
+							}
+							else {
+
+								boolean spatial = false;
+								String spatialColumn = "";
+								if( indexMetadata.getKey().spatial ) {
+									spatialColumn = indexMetadata.getKey().columns.get(0).name;
+									spatial = true;
+								}
+
+								if (spatial) {
+									LOGGER.info("Spatial index");
+									final MongoCursor<Document> cursor = mongoCollection.find(new Document(spatialColumn + ".type", "Point")).projection(new Document(spatialColumn + ".type", 1)).batchSize(100).limit(100).cursor();
+
+									boolean allDocsHavePoints = false;
+
+									int numberOfDocsWithPoint = 0;
+									while (cursor.hasNext()) {
+										cursor.next();
+										numberOfDocsWithPoint++;
+									}
+
+									allDocsHavePoints = numberOfDocsWithPoint == 100;
+
+									final String SQLStatement = String.format(
+											"create index %s on %s " +
+													"(JSON_VALUE(" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", '$.%s' returning SDO_GEOMETRY ERROR ON ERROR NULL ON EMPTY)) " +
+													"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getName(), collectionName, spatialColumn);
+
+									LOGGER.info(SQLStatement);
+									start = System.currentTimeMillis();
+									gui.startIndex(indexMetadata.getName());
+									s.execute(SQLStatement);
+									LOGGER.info("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+									gui.endIndex(indexMetadata.getName());
+								}
+								else {
+									LOGGER.info("Normal index");
+									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getName(), getCreateIndexColumns(collectionName, indexMetadata.getKey(), fieldsInfo), indexMetadata.isUnique());
+
+									LOGGER.info(indexSpec);
+									start = System.currentTimeMillis();
+									gui.startIndex(indexMetadata.getName());
+									sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
+									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+									gui.endIndex(indexMetadata.getName());
 								}
 							}
 						}
@@ -549,6 +660,119 @@ public class OracleCollectionInfo {
 				s.append("}");
 			}
 
+		}
+
+		return s.toString();
+	}
+	private String getCreateIndexColumns(String collectionName, MetadataKey keys, Map<String, FieldInfo> fieldsInfo) {
+		final StringBuilder s = new StringBuilder();
+
+		for (IndexColumn column : keys.columns) {
+			String columnName = column.name;
+
+			if (s.length() > 0) {
+				s.append(", ");
+			}
+
+           /* if (cantIndex.contains(ic.name)) {
+                if (s.length() > 0) {
+                    s.setLength(s.length() - 2);
+                }
+
+                log.warn("For collection " + collectionName + ", the field " + ic.name + " has been removed from the index definition: Multi-value index not yet supported for index " + name + " on field " + ic.name + " which path belongs to an array");
+                warning = true;
+            }
+            else if (oracleMetadata.containsKey(collectionName + "." + ic.name + ".datatype")) {
+                final String dataType = (String) oracleMetadata.get(collectionName + "." + ic.name + ".datatype");
+
+                switch (dataType) {
+                    case "number":
+                        s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"number\"}");
+                        break;
+
+                    case "string":
+                        final String dataLength = (String) oracleMetadata.get(collectionName + "." + ic.name + ".maxlength");
+
+                        if (Integer.parseInt(dataLength) > INDEXED_FIELD_MAX_LENGTH_WARNING) {
+                            log.warn("For collection " + collectionName + ", index " + name + " has a string field \"" + ic.name + "\" with a maxlength (" + dataLength + " bytes, defined in oracle metadata file) strictly larger than the threshold " + INDEXED_FIELD_MAX_LENGTH_WARNING);
+                            warning = true;
+                        }
+
+                        s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"string\", \"maxlength\": ").append(dataLength).append("}");
+                        break;
+
+                    default:
+                        s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\"}");
+                        break;
+                }
+            }
+            else {
+                if (fieldsDataTypes.containsKey(ic.name)) {
+                    if (fieldsDataTypes.get(ic.name).size() == 1) {
+                        final String dataType = fieldsDataTypes.get(ic.name).iterator().next();
+                        if ("number".equals(dataType)) {
+                            s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"number\"}");
+                        }
+                        else if ("array".equals(dataType)) {
+                            // remove the trailing ", "
+                            if (s.length() > 0) {
+                                s.setLength(s.length() - 2);
+                            }
+
+                            log.warn("For collection " + collectionName + ", the field " + ic.name + " has been removed from the index definition: Multi-value index not yet supported for index " + name + " on field " + ic.name + " which is an array");
+                            warning = true;
+                            //s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"number\"}");
+                        }
+                        else {
+                            if (maxLengths.containsKey(ic.name)) {
+                                if (maxLengths.get(ic.name) > INDEXED_FIELD_MAX_LENGTH_WARNING) {
+                                    log.warn("For collection " + collectionName + ", index " + name + " has a string field \"" + ic.name + "\" with a maxlength (" + maxLengths.get(ic.name) + " bytes) strictly larger than the threshold " + INDEXED_FIELD_MAX_LENGTH_WARNING);
+                                    warning = true;
+                                }
+                                s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"string\", \"maxlength\": ").append(maxLengths.get(ic.name)).append("}");
+                            }
+                            else {
+                                s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\"}");
+                            }
+                        }
+                    }
+                    else {
+                        if (maxLengths.containsKey(ic.name)) {
+                            if (maxLengths.get(ic.name) > INDEXED_FIELD_MAX_LENGTH_WARNING) {
+                                log.warn("For collection " + collectionName + ", index " + name + " has a string field \"" + ic.name + "\" with a maxlength (" + maxLengths.get(ic.name) + " bytes) strictly larger than the threshold " + INDEXED_FIELD_MAX_LENGTH_WARNING);
+                                warning = true;
+                            }
+                            s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"string\", \"maxlength\": ").append(maxLengths.get(ic.name)).append("}");
+                        }
+                        else {
+                            s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"datatype\": \"string\"}");
+                        }
+                    }
+                }
+                else if (maxLengths.containsKey(ic.name)) {
+                    if (maxLengths.get(ic.name) > INDEXED_FIELD_MAX_LENGTH_WARNING) {
+                        log.warn("For collection " + collectionName + ", index " + name + " has a field \"" + ic.name + "\" with a maxlength (" + maxLengths.get(ic.name) + " bytes) strictly larger than the threshold " + INDEXED_FIELD_MAX_LENGTH_WARNING);
+                        warning = true;
+                    }
+                    s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\", \"maxlength\": ").append(maxLengths.get(ic.name)).append("}");
+                }
+                else {
+                    s.append("{\"path\": \"").append(ic.name).append("\", \"order\": \"").append(ic.asc ? "asc" : "desc").append("\"}");
+                }
+            }*/
+
+			final FieldInfo fi = fieldsInfo.get("$." + columnName);
+
+			if (fi == null) {
+				s.append("{\"path\": \"").append(columnName).append("\", \"order\": \"").append(column.asc ? "asc" : "desc").append("\"}");
+			}
+			else {
+				s.append("{\"path\": \"").append(columnName).append("\", \"order\": \"").append(column.asc ? "asc" : "desc").append("\", \"datatype\": \"").append(fi.type).append("\"");
+				if ("string".equals(fi.type)) {
+					s.append(", \"maxlength\": ").append(fi.length);
+				}
+				s.append("}");
+			}
 		}
 
 		return s.toString();
