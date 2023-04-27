@@ -263,7 +263,7 @@
             <plugin>
                 <groupId>org.graalvm.buildtools</groupId>
                 <artifactId>native-maven-plugin</artifactId>
-                <version>0.9.20</version> <!-- see: https://graalvm.github.io/native-build-tools/latest/index.html -->
+                <version>0.9.21</version> <!-- see: https://graalvm.github.io/native-build-tools/latest/index.html -->
                 <extensions>true</extensions>
                 <executions>
                     <execution>
@@ -330,12 +330,18 @@
                         <buildArg>-H:-CheckToolchain</buildArg>
                         <buildArg>--initialize-at-build-time=sun.instrument.InstrumentationImpl</buildArg>
                         <!-- buildArg>-initialize-at-run-time=oracle.dms.console.DMSConsole</buildArg -->
-                        <buildArg>--initialize-at-run-time=oracle.xdb.XMLType</buildArg>
-                        <buildArg>--initialize-at-run-time=oracle.ucp.jdbc.oracle.ONSOracleFailoverEventSubscriber</buildArg>
-                        <buildArg>--initialize-at-run-time=oracle.ucp.admin.UniversalConnectionPoolManagerBase</buildArg>
-                        <buildArg>--initialize-at-run-time=oracle.ucp.jdbc.oracle.ONSDatabaseEventHandlerTask</buildArg>
-                        <!-- buildArg>-initialize-at-run-time=oracle.dms.instrument.Level</buildArg -->
-                        <buildArg>--initialize-at-run-time=oracle.net.nt.MQLNTAdapter</buildArg>
+                        <buildArg>--features=oracle.nativeimage.CharacterSetFeature</buildArg>
+                        <buildArg>--features=oracle.nativeimage.NativeImageFeature</buildArg>
+                        <buildArg>--trace-class-initialization=oracle.sql.CharacterSet</buildArg>
+                        <buildArg>--initialize-at-build-time=oracle.sql.CharacterSet</buildArg>
+                        <buildArg>--initialize-at-build-time=oracle.sql.ConverterArchive</buildArg>
+                        <buildArg>--initialize-at-build-time=oracle.sql.CharacterSet$CharacterSetNamesMapHolder</buildArg>
+                        <!-- buildArg>- -initialize-at-run-time=oracle.xdb.XMLType</buildArg-->
+                        <!-- buildArg>- -initialize-at-run-time=oracle.ucp.jdbc.oracle.ONSOracleFailoverEventSubscriber</buildArg-->
+                        <!-- buildArg>- -initialize-at-run-time=oracle.ucp.admin.UniversalConnectionPoolManagerBase</buildArg-->
+                        <!-- buildArg>- -initialize-at-run-time=oracle.ucp.jdbc.oracle.ONSDatabaseEventHandlerTask</buildArg-->
+                        <!-- - buildArg>-initialize-at-run-time=oracle.dms.instrument.Level</buildArg -->
+                        <!-- buildArg>- -initialize-at-run-time=oracle.net.nt.MQLNTAdapter</buildArg-->
                         <buildArg>--initialize-at-build-time=oracle.net.jdbc.nl.mesg.NLSR</buildArg>
                     </buildArgs>
                 </configuration>

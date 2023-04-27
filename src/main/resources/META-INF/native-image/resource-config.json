@@ -5,6 +5,9 @@
       "pattern":"\\QMETA-INF/services/java.sql.Driver\\E"
     }, 
     {
+      "pattern":"\\QMETA-INF/services/oracle.jdbc.spi.OracleResourceProvider\\E"
+    }, 
+    {
       "pattern":"\\Qlog4j.properties\\E"
     }, 
     {
@@ -12,6 +15,9 @@
     }, 
     {
       "pattern":"\\Qnet/rubygrapefruit/platform/linux-aarch64/libnative-platform.so\\E"
+    }, 
+    {
+      "pattern":"\\Qnet/rubygrapefruit/platform/linux-amd64-ncurses5/libnative-platform-curses.so\\E"
     }, 
     {
       "pattern":"\\Qnet/rubygrapefruit/platform/linux-amd64-ncurses6/libnative-platform-curses.so\\E"
@@ -61,6 +67,10 @@
   ]},
   "bundles":[
     {
+      "name":"oracle.jdbc.driver.ErrorMessages",
+      "classNames":["oracle.jdbc.driver.ErrorMessages"]
+    }, 
+    {
       "name":"oracle.jdbc.driver.Messages",
       "locales":[
         "", 
@@ -68,8 +78,16 @@
       ]
     }, 
     {
+      "name":"oracle.jdbc.driver.json.ErrorMessagesJson",
+      "classNames":["oracle.jdbc.driver.json.ErrorMessagesJson"]
+    }, 
+    {
       "name":"oracle.net.mesg.Message",
       "locales":["und"]
+    }, 
+    {
+      "name":"oracle.net.mesg.NetErrorMessages",
+      "classNames":["oracle.net.mesg.NetErrorMessages"]
     }, 
     {
       "name":"oracle.ucp.util.UCPMessages",
