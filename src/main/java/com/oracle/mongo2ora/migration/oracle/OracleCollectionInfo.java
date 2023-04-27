@@ -252,9 +252,10 @@ public class OracleCollectionInfo {
 	 *
 	 * @param mediumPDS
 	 * @param mongoCollection
+	 * @param skipSecondaryIndexes
 	 * @throws SQLException
 	 */
-	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, MongoDBMetadata collectionMetadataDump, int maxParallelDegree, ASCIIGUI gui, boolean mongoDBAPICompatible) throws SQLException, OracleException {
+	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, MongoDBMetadata collectionMetadataDump, int maxParallelDegree, ASCIIGUI gui, boolean mongoDBAPICompatible, boolean skipSecondaryIndexes) throws SQLException, OracleException {
 		try (Connection c = mediumPDS.getConnection()) {
 			try (Statement s = c.createStatement()) {
 				LOGGER.info("Enabling JSON constraint...");
@@ -324,7 +325,7 @@ public class OracleCollectionInfo {
 				// manage other MongoDB indexes
 				int mongoDBIndex = 0;
 
-				if (mongoCollection != null) {
+				if (mongoCollection != null && !skipSecondaryIndexes) {
 					for (Document indexMetadata : mongoCollection.listIndexes()) {
 						mongoDBIndex++;
 					}
@@ -438,7 +439,7 @@ public class OracleCollectionInfo {
 					}
 				}
 				// MANAGE DUMP METADATA NOW
-				else if( collectionMetadataDump != null ) {
+				else if( collectionMetadataDump != null && !skipSecondaryIndexes) {
 					for (MetadataIndex indexMetadata : collectionMetadataDump.getIndexes()) {
 						mongoDBIndex++;
 					}

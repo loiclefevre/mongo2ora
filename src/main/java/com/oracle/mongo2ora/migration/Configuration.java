@@ -50,6 +50,7 @@ public class Configuration {
 
 	public String sourceDumpFolder;
 	public boolean mongodbAPICompatible;
+	public boolean skipSecondaryIndexes;
 
 	public static Configuration prepareConfiguration(String[] args) {
 		Configuration conf = new Configuration();
@@ -59,6 +60,10 @@ public class Configuration {
 			switch (arg.toLowerCase()) {
 				case "--mongodbapi":
 					conf.mongodbAPICompatible = true;
+					break;
+
+				case "--skip-secondary-indexes":
+					conf.skipSecondaryIndexes = true;
 					break;
 
 				case "-s":
