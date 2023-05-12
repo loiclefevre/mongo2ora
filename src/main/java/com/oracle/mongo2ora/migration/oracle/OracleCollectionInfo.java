@@ -54,7 +54,7 @@ public class OracleCollectionInfo {
 
 
 	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection,
-																	 boolean autonomousDatabase, boolean useMemoptimizeForWrite, boolean mongoDBAPICompatible) throws SQLException, OracleException {
+																	 boolean autonomousDatabase, boolean useMemoptimizeForWrite, boolean mongoDBAPICompatible, boolean forceOSON) throws SQLException, OracleException {
 		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName, autonomousDatabase);
 
 		try (Connection c = adminPDS.getConnection()) {
@@ -78,7 +78,7 @@ public class OracleCollectionInfo {
 
 				if (sodaCollection == null) {
 					LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does not exist => creating it");
-					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : db.admin().createCollection(collectionName);
+					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : createClassicCollection(db, collectionName, forceOSON);
 					if (sodaCollection == null) {
 						throw new IllegalStateException("Can't create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + collectionName);
 					}
@@ -99,7 +99,7 @@ public class OracleCollectionInfo {
 									// TODO 21c+ => JSON
 									// TODO 19c => BLOB if not autonomous database and not mongodb api compatible
 									// TODO 19c => BLOB OSON if autonomous database or not mongodb api compatible
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : db.admin().createCollection(collectionName);
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : createClassicCollection(db, collectionName, forceOSON);
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + collectionName);
 									}
@@ -118,7 +118,7 @@ public class OracleCollectionInfo {
 									LOGGER.warn((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
 									LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : db.admin().createCollection(collectionName);
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : createClassicCollection(db, collectionName, forceOSON);
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + collectionName);
 									}
@@ -193,6 +193,70 @@ public class OracleCollectionInfo {
 		return ret;
 	}
 
+	private static OracleCollection createClassicCollection(OracleDatabase db, String collectionName, boolean forceOSON) throws OracleException, SQLException {
+		if(forceOSON) {
+			final int version = db.admin().getConnection().getMetaData().getDatabaseMajorVersion();
+
+			try (CallableStatement cs = db.admin().getConnection().prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
+				final String metadata = version == 19 ?
+						"""
+								{
+									"contentColumn" : {
+									   "name" : "JSON_DOCUMENT",
+									   "sqlType" : "BLOB",
+									   "jsonFormat" : "OSON"
+									},
+									"keyColumn" : {
+									   "name" : "ID"
+									},
+									"versionColumn" : {
+										"name" : "VERSION",
+										"method" : "UUID"
+									},
+									"lastModifiedColumn" : {
+										"name" : "LAST_MODIFIED"
+									},
+									"creationTimeColumn" : {
+										"name" : "CREATED_ON"
+									}
+								}"""
+						: """
+					    				{
+					    "contentColumn" : {
+					       "name" : "JSON_DOCUMENT"
+					    },
+					    "keyColumn" : {
+					       "name" : "ID"
+					    },
+					    "versionColumn" : {
+					        "name" : "VERSION",
+					        "method" : "UUID"
+					    },
+					    "lastModifiedColumn" : {
+					        "name" : "LAST_MODIFIED"
+					    },
+					    "creationTimeColumn" : {
+					        "name" : "CREATED_ON"
+					    }
+					}""";
+
+				LOGGER.info("Using metadata: "+metadata);
+
+				cs.registerOutParameter(3, Types.VARCHAR);
+				cs.setString(1, collectionName);
+				cs.setString(2, metadata);
+
+				cs.execute();
+			}
+
+			return db.openCollection(collectionName);
+		} else {
+			LOGGER.info("Using default metadata");
+
+			return db.admin().createCollection(collectionName);
+		}
+	}
+
 	/**
 	 *
 	 */
@@ -245,6 +309,8 @@ public class OracleCollectionInfo {
 					        "name" : "CREATED_ON"
 					    }
 					}""";
+
+			LOGGER.info("Using metadata: "+metadata);
 
 			cs.registerOutParameter(3, Types.VARCHAR);
 			cs.setString(1, collectionName);
