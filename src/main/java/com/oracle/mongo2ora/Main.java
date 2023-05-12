@@ -348,6 +348,9 @@ public class Main {
 								//setBaseSize(r.getLong(3)/1024d/1024d/1024d);
 							}
 						}
+						catch(SQLException ignored) {
+							AUTONOMOUS_DATABASE = false;
+						}
 					}
 				}
 				catch (SQLException sqle) {
@@ -648,6 +651,9 @@ public class Main {
 								//setRegion(r.getString(2));
 								//setBaseSize(r.getLong(3)/1024d/1024d/1024d);
 							}
+						}
+						catch(SQLException ignored) {
+							AUTONOMOUS_DATABASE = false;
 						}
 					}
 				}

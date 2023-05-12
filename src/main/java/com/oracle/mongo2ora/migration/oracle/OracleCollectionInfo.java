@@ -152,7 +152,7 @@ public class OracleCollectionInfo {
 					while (r.next()) {
 						final String constraintText = r.getString(2);
 						final String condition = constraintText.toLowerCase();
-						if (condition.contains("is json") && condition.contains(mongoDBAPICompatible?"data":"json_document")) {
+						if (condition.contains("is json") && condition.contains(mongoDBAPICompatible ? "data" : "json_document")) {
 							ret.isJsonConstraintName = r.getString(1);
 							ret.isJsonConstraintEnabled = r.getString(3).equalsIgnoreCase("ENABLED");
 							ret.isJsonConstraintText = constraintText;
@@ -193,17 +193,46 @@ public class OracleCollectionInfo {
 		return ret;
 	}
 
+	/**
+	 *
+	 */
 	private static OracleCollection createMongoDBAPICompatibleCollection(OracleDatabase db, String collectionName) throws SQLException, OracleException {
+		final int version = db.admin().getConnection().getMetaData().getDatabaseMajorVersion();
+
 		try (CallableStatement cs = db.admin().getConnection().prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
-			final String metadata = """
-					{
+			final String metadata = version == 19 ?
+					"""
+							{
+								"contentColumn" : {
+								   "name" : "DATA",
+								   "sqlType" : "BLOB",
+								   "jsonFormat" : "OSON"
+								},
+								"keyColumn" : {
+								   "name" : "ID",
+								   "assignmentMethod" : "EMBEDDED_OID",
+								   "path" : "_id"
+								},
+								"versionColumn" : {
+									"name" : "VERSION",
+									"method" : "UUID"
+								},
+								"lastModifiedColumn" : {
+									"name" : "LAST_MODIFIED"
+								},
+								"creationTimeColumn" : {
+									"name" : "CREATED_ON"
+								}
+							}"""
+					: """
+					    				{
 					    "contentColumn" : {
-					      "name" : "DATA"
+					       "name" : "DATA"
 					    },
 					    "keyColumn" : {
 					       "name" : "ID",
 					       "assignmentMethod" : "EMBEDDED_OID",
-					      "path" : "_id"
+					       "path" : "_id"
 					    },
 					    "versionColumn" : {
 					        "name" : "VERSION",
@@ -341,7 +370,7 @@ public class OracleCollectionInfo {
 
 						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
 
-						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( "+(mongoDBAPICompatible?"DATA":"JSON_DOCUMENT")+", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + " where rownum <= 1000)\n" +
+						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + " where rownum <= 1000)\n" +
 								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
 							while (r.next()) {
 								String key = r.getString(1);
@@ -439,7 +468,7 @@ public class OracleCollectionInfo {
 					}
 				}
 				// MANAGE DUMP METADATA NOW
-				else if( collectionMetadataDump != null && !skipSecondaryIndexes) {
+				else if (collectionMetadataDump != null && !skipSecondaryIndexes) {
 					for (MetadataIndex indexMetadata : collectionMetadataDump.getIndexes()) {
 						mongoDBIndex++;
 					}
@@ -455,7 +484,7 @@ public class OracleCollectionInfo {
 
 						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
 
-						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( "+(mongoDBAPICompatible?"DATA":"JSON_DOCUMENT")+", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + " where rownum <= 1000)\n" +
+						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + " where rownum <= 1000)\n" +
 								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
 							while (r.next()) {
 								String key = r.getString(1);
@@ -480,7 +509,7 @@ public class OracleCollectionInfo {
 
 								boolean spatial = false;
 								String spatialColumn = "";
-								if( indexMetadata.getKey().spatial ) {
+								if (indexMetadata.getKey().spatial) {
 									spatialColumn = indexMetadata.getKey().columns.get(0).name;
 									spatial = true;
 								}
@@ -665,6 +694,7 @@ public class OracleCollectionInfo {
 
 		return s.toString();
 	}
+
 	private String getCreateIndexColumns(String collectionName, MetadataKey keys, Map<String, FieldInfo> fieldsInfo) {
 		final StringBuilder s = new StringBuilder();
 
