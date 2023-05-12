@@ -321,6 +321,23 @@ public class Main {
 
 				// Get destination database information
 				try (Connection c = adminPDS.getConnection()) {
+
+/*					if(conf.forceOSON || conf.mongodbAPICompatible) {
+						final int version = c.getMetaData().getDatabaseMajorVersion();
+						if (version < 19) {
+							throw new RuntimeException("You need to be in version 19c minimum, latest Release Update.");
+						}
+						else if (version == 19) {
+							final int ru = c.getMetaData().getDatabaseMinorVersion();
+							if (ru == 17 || ru == 18) {
+								throw new RuntimeException("You need to be apply a one-off .");
+							}
+							else if (ru < 17) {
+								throw new RuntimeException("You need to be in version 19.19 minimum, please upgrade.");
+							}
+						}
+					}
+*/
 					try (Statement s = c.createStatement()) {
 						try (ResultSet r = s.executeQuery("select version_full, count(*) from gv$instance group by version_full")) {
 							if (r.next()) {
@@ -876,6 +893,7 @@ public class Main {
 	private static PoolDataSource initializeConnectionPool(boolean admin, String ajdConnectionService, String user, String password, int cores) throws SQLException, IOException {
 		PoolDataSource pds = PoolDataSourceFactory.getPoolDataSource();
 		pds.setConnectionFactoryClassName("oracle.jdbc.pool.OracleDataSource");
+		//pds.setConnectionFactoryClassName("oracle.jdbc.datasource.impl.OracleDataSource");
 
 		if (ajdConnectionService.toLowerCase().trim().startsWith("(")) {
 			pds.setURL("jdbc:oracle:thin:@" + ajdConnectionService);
@@ -898,6 +916,7 @@ public class Main {
 		//pds.setMaxConnectionReuseCount(5000);
 		//pds.setConnectionValidationTimeout();
 		//pds.setSecondsToTrustIdleConnection(1);
+		pds.setConnectionProperty(OracleConnection.CONNECTION_PROPERTY_ENABLE_AC_SUPPORT, "false");
 		pds.setConnectionProperty(OracleConnection.CONNECTION_PROPERTY_DEFAULT_ROW_PREFETCH, "20");
 		pds.setConnectionProperty("tcp.nodelay", "yes");
 		pds.setConnectionProperty("oracle.jdbc.bindUseDBA", "true");
