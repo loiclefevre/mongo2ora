@@ -394,7 +394,7 @@ public class Main {
 					final long startTimeCollection = System.currentTimeMillis();
 
 					// disable is JSON constraint, remove indexes...
-					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible);
+					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
 						//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -707,7 +707,7 @@ public class Main {
 					final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collectionName);
 
 					// disable is JSON constraint, remove indexes...
-					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible);
+					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
 						//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");
