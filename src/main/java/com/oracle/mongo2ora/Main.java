@@ -420,7 +420,7 @@ public class Main {
 
 					gui.addNewDestinationDatabaseCollection(collectionName, null, mongoDatabase.getCollectionMetadata(collectionName));
 
-					if(conf.buildSecondaryIndexes) {
+					if(!conf.buildSecondaryIndexes) {
 /*
 					// retrieve average document size
 					final Iterable<Document> statsIterator = mongoCollection.aggregate(Arrays.asList(
