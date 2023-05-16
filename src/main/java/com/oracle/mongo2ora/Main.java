@@ -329,7 +329,7 @@ public class Main {
 						}
 						else if (version == 19) {
 							final int ru = c.getMetaData().getDatabaseMinorVersion();
-							if (ru == 17 || ru == 18) {
+							if (ru == 17) {
 								throw new RuntimeException("You need to be apply a one-off .");
 							}
 							else if (ru < 17) {
@@ -411,7 +411,7 @@ public class Main {
 					final long startTimeCollection = System.currentTimeMillis();
 
 					// disable is JSON constraint, remove indexes...
-					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON);
+					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
 						//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -419,6 +419,8 @@ public class Main {
 					}
 
 					gui.addNewDestinationDatabaseCollection(collectionName, null, mongoDatabase.getCollectionMetadata(collectionName));
+
+					if(conf.buildSecondaryIndexes) {
 /*
 					// retrieve average document size
 					final Iterable<Document> statsIterator = mongoCollection.aggregate(Arrays.asList(
@@ -451,126 +453,112 @@ public class Main {
 						iterations = ((maxId - minId) / bucketSize) + 1;
 					}
 */
-					//System.out.println(collectionName + ": bucket size= " + bucketSize + ", iterations: " + iterations);
+						//System.out.println(collectionName + ": bucket size= " + bucketSize + ", iterations: " + iterations);
 
-					final List<CollectionCluster> publishingCfs = new LinkedList<>();
+						final List<CollectionCluster> publishingCfs = new LinkedList<>();
 
-					// scan the BSON data
-					// - compute averageDocumentSize
-					// - split file into 5,000,000 BSON packets collection (denoting file position start)
+						// scan the BSON data
+						// - compute averageDocumentSize
+						// - split file into 5,000,000 BSON packets collection (denoting file position start)
+						final File bsonFile = mongoDatabase.getBSONFile(collectionName);
 
-/*					long tempMin = minId;
-					final long startClusterAnalysis = System.currentTimeMillis();
+						long count = 0;
+						position = previousPosition = 0;
 
-					for (long i = 0; i < iterations; i++, tempMin += bucketSize) {
+						try (
+								InputStream inputStream = bsonFile.getName().toLowerCase().endsWith(".gz") ?
+										new GZIPInputStream(new FileInputStream(bsonFile), 128 * 1024 * 1024)
+										: new BufferedInputStream(new FileInputStream(bsonFile), 128 * 1024 * 1024)
+						) {
+							long clusterStartPosition = 0;
+							long clusterCount = 0;
+							while (true) {
+								try {
+									//final byte[] data = readNextBSONRawData(inputStream);
+									skipNextBSONRawData(inputStream);
+									clusterCount++;
 
-						final long _max = i == iterations - 1 ? maxId + 1 : tempMin + bucketSize;
-
-						//System.out.println(i + " From " + tempMin + " to " + _max);
-						//System.out.println(i + "\t=> from " + Long.toHexString(tempMin) + " to " + Long.toHexString(_max));
-
-						final CompletableFuture<CollectionCluster> publishingCf = new CompletableFuture<>();
-						publishingCfs.add(publishingCf);
-						counterThreadPool.execute(new CollectionClusteringAnalyzer(i, collectionName, publishingCf, tempMin, _max, mongoDatabase, gui, averageDocumentSize));
-					}
-*/
-					final File bsonFile = mongoDatabase.getBSONFile(collectionName);
-
-					long count = 0;
-					position = previousPosition = 0;
-
-					try (
-							InputStream inputStream = bsonFile.getName().toLowerCase().endsWith(".gz") ?
-									new GZIPInputStream(new FileInputStream(bsonFile), 128 * 1024 * 1024)
-									: new BufferedInputStream(new FileInputStream(bsonFile), 128 * 1024 * 1024)
-					) {
-						long clusterStartPosition = 0;
-						long clusterCount = 0;
-						while (true) {
-							try {
-								//final byte[] data = readNextBSONRawData(inputStream);
-								skipNextBSONRawData(inputStream);
-								clusterCount++;
-
-								// limit cluster size to 100,000 documents or 2 GB
-								boolean sizeOverFlow=false;
-								if((sizeOverFlow= ((position - clusterStartPosition) > 2048L*1024L*1024L)) || clusterCount == 100000) {
-									if(sizeOverFlow) {
-										clusterCount--;
-										count += clusterCount;
-										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition,(int)(previousPosition-clusterStartPosition)));
-										//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
-										gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(previousPosition-clusterStartPosition)/(double)clusterCount));
-										clusterCount = 1;
-										clusterStartPosition = previousPosition;
-									} else {
-										count += clusterCount;
-										publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition,(int)(position-clusterStartPosition)));
-										//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
-										gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(position-clusterStartPosition)/(double)clusterCount));
-										clusterCount = 0;
-										clusterStartPosition = position;
+									// limit cluster size to 100,000 documents or 2 GB
+									boolean sizeOverFlow = false;
+									if ((sizeOverFlow = ((position - clusterStartPosition) > 2048L * 1024L * 1024L)) || clusterCount == 100000) {
+										if (sizeOverFlow) {
+											clusterCount--;
+											count += clusterCount;
+											publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (previousPosition - clusterStartPosition)));
+											//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+											gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long) ((double) (previousPosition - clusterStartPosition) / (double) clusterCount));
+											clusterCount = 1;
+											clusterStartPosition = previousPosition;
+										}
+										else {
+											count += clusterCount;
+											publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (position - clusterStartPosition)));
+											//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+											gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long) ((double) (position - clusterStartPosition) / (double) clusterCount));
+											clusterCount = 0;
+											clusterStartPosition = position;
+										}
 									}
-								}
 
-							} catch (EOFException eof) {
-								break;
+								}
+								catch (EOFException eof) {
+									break;
+								}
+							}
+
+							if (clusterCount > 0) {
+								final boolean sizeOverFlow = (position - clusterStartPosition) > 2048L * 1024L * 1024L;
+								count += clusterCount;
+								publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (position - clusterStartPosition)));
+								//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
+								gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long) ((double) (position - clusterStartPosition) / (double) clusterCount));
 							}
 						}
 
-						if( clusterCount > 0 ) {
-							final boolean sizeOverFlow= (position - clusterStartPosition) > 2048L*1024L*1024L;
-							count += clusterCount;
-							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition,(int)(position-clusterStartPosition)));
-							//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
-							gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long)((double)(position-clusterStartPosition)/(double)clusterCount));
-						}
-					}
+						LOGGER.info("Collection " + collectionName + " has " + count + " JSON document(s).");
 
-					LOGGER.info("Collection "+collectionName+" has "+count+" JSON document(s).");
+						final List<CompletableFuture<ConversionInformation>> publishingCfsConvert = new LinkedList<>();
+						final List<CollectionCluster> mongoDBCollectionClusters = new ArrayList<>();
 
-					final List<CompletableFuture<ConversionInformation>> publishingCfsConvert = new LinkedList<>();
-					final List<CollectionCluster> mongoDBCollectionClusters = new ArrayList<>();
+						long total = 0;
+						int i = 0;
+						final List<CollectionCluster> clusters = new ArrayList<>();
 
-					long total = 0;
-					int i = 0;
-					final List<CollectionCluster> clusters = new ArrayList<>();
-
-					if (conf.useRSI) {
-						rsi = ReactiveStreamsIngestion
-								.builder()
-								.url("jdbc:oracle:thin:@" + conf.destinationConnectionString)
-								.username(conf.destinationUsername)
-								.password(conf.destinationPassword)
-								.schema(conf.destinationUsername)
-								.executor(rsiWorkerThreadPool)
-								//.bufferInterval(Duration.ofMillis(1000L))
-								.bufferRows(conf.RSIbufferRows /*49676730*/)
-								.rowsPerBatch(conf.batchSize)
+						if (conf.useRSI) {
+							rsi = ReactiveStreamsIngestion
+									.builder()
+									.url("jdbc:oracle:thin:@" + conf.destinationConnectionString)
+									.username(conf.destinationUsername)
+									.password(conf.destinationPassword)
+									.schema(conf.destinationUsername)
+									.executor(rsiWorkerThreadPool)
+									//.bufferInterval(Duration.ofMillis(1000L))
+									.bufferRows(conf.RSIbufferRows /*49676730*/)
+									.rowsPerBatch(conf.batchSize)
 //                            .averageMessageSize(32*1024*1024)
-								//.bufferInterval(Duration.ofSeconds(20))
+									//.bufferInterval(Duration.ofSeconds(20))
 //                            .bufferInterval(Duration.ofSeconds(1L))
-								.table(collectionName)
-								.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT"})
-								.useDirectPath()
-								.useDirectPathNoLog()
-								.useDirectPathParallel()
-								.useDirectPathSkipIndexMaintenance()
-								.useDirectPathSkipUnusableIndexes()
-								.useDirectPathStorageInit(String.valueOf(8 * 1024 * 1024))
-								.useDirectPathStorageNext(String.valueOf(8 * 1024 * 1024))
-								.build();
-					}
+									.table(collectionName)
+									.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT"})
+									.useDirectPath()
+									.useDirectPathNoLog()
+									.useDirectPathParallel()
+									.useDirectPathSkipIndexMaintenance()
+									.useDirectPathSkipUnusableIndexes()
+									.useDirectPathStorageInit(String.valueOf(8 * 1024 * 1024))
+									.useDirectPathStorageNext(String.valueOf(8 * 1024 * 1024))
+									.build();
+						}
 
-					for (CollectionCluster cc : publishingCfs) {
-						clusters.add(cc);
+						for (CollectionCluster cc : publishingCfs) {
+							clusters.add(cc);
 
-						if (cc.count > 0) {
-							total += cc.count;
-							mongoDBCollectionClusters.add(cc);
+							if (cc.count > 0) {
+								total += cc.count;
+								mongoDBCollectionClusters.add(cc);
 
-							final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
-							publishingCfsConvert.add(pCf);
+								final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
+								publishingCfsConvert.add(pCf);
 /*							if (conf.useRSI) {
 								workerThreadPool.execute(AUTONOMOUS_DATABASE ? new RSIBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize) :
 										new RSIBSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize));
@@ -579,33 +567,35 @@ public class Main {
 								workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 							}
 							else {
-*/								workerThreadPool.execute(AUTONOMOUS_DATABASE || conf.mongodbAPICompatible || conf.forceOSON ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
-										new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
-/*							}
 */
-							i++;
+								workerThreadPool.execute(AUTONOMOUS_DATABASE || conf.mongodbAPICompatible || conf.forceOSON ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
+										new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
+								/*							}
+								 */
+								i++;
+							}
 						}
-					}
 
-					//System.out.println("Docs: " + total + " for " + mongoDBCollectionClusters.size() + " cluster(s)");
-					//println(Console.Style.ANSI_BLUE + "Collection clustering analysis duration: " + getDurationSince(startClusterAnalysis));
+						//System.out.println("Docs: " + total + " for " + mongoDBCollectionClusters.size() + " cluster(s)");
+						//println(Console.Style.ANSI_BLUE + "Collection clustering analysis duration: " + getDurationSince(startClusterAnalysis));
 
-					clusters.clear();
+						clusters.clear();
 
-					final List<ConversionInformation> informations = publishingCfsConvert.stream().map(CompletableFuture::join).collect(toList());
+						final List<ConversionInformation> informations = publishingCfsConvert.stream().map(CompletableFuture::join).collect(toList());
 
-					for (ConversionInformation ci : informations) {
-						if (ci.exception != null) {
-							LOGGER.error("Error during ingestion!", ci.exception);
+						for (ConversionInformation ci : informations) {
+							if (ci.exception != null) {
+								LOGGER.error("Error during ingestion!", ci.exception);
+							}
 						}
-					}
 
-					if (conf.useRSI) {
-						rsi.close();
+						if (conf.useRSI) {
+							rsi.close();
+						}
 					}
 
 					// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
-					oracleCollectionInfo.finish(mediumPDS, null, mongoDatabase.getCollectionMetadata(collectionName), conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes);
+					oracleCollectionInfo.finish(mediumPDS, null, mongoDatabase.getCollectionMetadata(collectionName), conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes, conf.buildSecondaryIndexes);
 					//gui.finishCollection();
 
 				}
@@ -724,7 +714,7 @@ public class Main {
 					final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collectionName);
 
 					// disable is JSON constraint, remove indexes...
-					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON);
+					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
 						//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -733,134 +723,136 @@ public class Main {
 
 					gui.addNewDestinationDatabaseCollection(collectionName, mongoCollection, null);
 
-					// retrieve average document size
-					final Iterable<Document> statsIterator = mongoCollection.aggregate(Arrays.asList(
-							new BsonDocument("$collStats", new BsonDocument("storageStats", new BsonDocument("scale", new BsonInt32(1))))
-					));
-					final Document stats = (Document) statsIterator.iterator().next().get("storageStats");
-					final long averageDocumentSize = stats.getInteger("avgObjSize");
+					if(!conf.buildSecondaryIndexes) {
+						// retrieve average document size
+						final Iterable<Document> statsIterator = mongoCollection.aggregate(Arrays.asList(
+								new BsonDocument("$collStats", new BsonDocument("storageStats", new BsonDocument("scale", new BsonInt32(1))))
+						));
+						final Document stats = (Document) statsIterator.iterator().next().get("storageStats");
+						final long averageDocumentSize = stats.getInteger("avgObjSize");
 
-					// Run clusterization on collection
-					Document min = mongoCollection.find().projection(include("_id")).sort(new Document("_id", 1)).hint(useIdIndexHint).first();
-					Document max = mongoCollection.find().projection(include("_id")).sort(new Document("_id", -1)).hint(useIdIndexHint).first();
+						// Run clusterization on collection
+						Document min = mongoCollection.find().projection(include("_id")).sort(new Document("_id", 1)).hint(useIdIndexHint).first();
+						Document max = mongoCollection.find().projection(include("_id")).sort(new Document("_id", -1)).hint(useIdIndexHint).first();
 
-					//System.out.println("min _id: " + min.get("_id").toString());
-					//System.out.println("max _id: " + max.get("_id").toString());
+						//System.out.println("min _id: " + min.get("_id").toString());
+						//System.out.println("max _id: " + max.get("_id").toString());
 
-					final long minId = Long.parseLong(Objects.requireNonNull(min).get("_id").toString().substring(0, 8), 16);
-					final long maxId = Long.parseLong(Objects.requireNonNull(max).get("_id").toString().substring(0, 8), 16);
+						final long minId = Long.parseLong(Objects.requireNonNull(min).get("_id").toString().substring(0, 8), 16);
+						final long maxId = Long.parseLong(Objects.requireNonNull(max).get("_id").toString().substring(0, 8), 16);
 
-					//System.out.println("min 8 first chars _id: " + minId);
-					//System.out.println("max 8 first chars _id: " + maxId);
+						//System.out.println("min 8 first chars _id: " + minId);
+						//System.out.println("max 8 first chars _id: " + maxId);
 
 
-					long bucketSize = 8L;
+						long bucketSize = 8L;
 
-					long iterations = ((maxId - minId) / bucketSize) + 1;
+						long iterations = ((maxId - minId) / bucketSize) + 1;
 
-					// We don't want to start 100000+ threads!
-					while (iterations > 100000) {
-						bucketSize *= 2L;
-						iterations = ((maxId - minId) / bucketSize) + 1;
-					}
+						// We don't want to start 100000+ threads!
+						while (iterations > 100000) {
+							bucketSize *= 2L;
+							iterations = ((maxId - minId) / bucketSize) + 1;
+						}
 
-					//System.out.println(collectionName + ": bucket size= " + bucketSize + ", iterations: " + iterations);
+						//System.out.println(collectionName + ": bucket size= " + bucketSize + ", iterations: " + iterations);
 
-					final List<CompletableFuture<CollectionCluster>> publishingCfs = new LinkedList<>();
+						final List<CompletableFuture<CollectionCluster>> publishingCfs = new LinkedList<>();
 
-					long tempMin = minId;
-					final long startClusterAnalysis = System.currentTimeMillis();
+						long tempMin = minId;
+						final long startClusterAnalysis = System.currentTimeMillis();
 
-					for (long i = 0; i < iterations; i++, tempMin += bucketSize) {
+						for (long i = 0; i < iterations; i++, tempMin += bucketSize) {
 
-						final long _max = i == iterations - 1 ? maxId + 1 : tempMin + bucketSize;
+							final long _max = i == iterations - 1 ? maxId + 1 : tempMin + bucketSize;
 
-						//System.out.println(i + " From " + tempMin + " to " + _max);
-						//System.out.println(i + "\t=> from " + Long.toHexString(tempMin) + " to " + Long.toHexString(_max));
+							//System.out.println(i + " From " + tempMin + " to " + _max);
+							//System.out.println(i + "\t=> from " + Long.toHexString(tempMin) + " to " + Long.toHexString(_max));
 
-						final CompletableFuture<CollectionCluster> publishingCf = new CompletableFuture<>();
-						publishingCfs.add(publishingCf);
-						counterThreadPool.execute(new CollectionClusteringAnalyzer(i, collectionName, publishingCf, tempMin, _max, mongoDatabase, gui, averageDocumentSize));
-					}
+							final CompletableFuture<CollectionCluster> publishingCf = new CompletableFuture<>();
+							publishingCfs.add(publishingCf);
+							counterThreadPool.execute(new CollectionClusteringAnalyzer(i, collectionName, publishingCf, tempMin, _max, mongoDatabase, gui, averageDocumentSize));
+						}
 
-					final List<CompletableFuture<ConversionInformation>> publishingCfsConvert = new LinkedList<>();
-					final List<CollectionCluster> mongoDBCollectionClusters = new ArrayList<>();
+						final List<CompletableFuture<ConversionInformation>> publishingCfsConvert = new LinkedList<>();
+						final List<CollectionCluster> mongoDBCollectionClusters = new ArrayList<>();
 
-					long total = 0;
-					int i = 0;
-					final List<CollectionCluster> clusters = new ArrayList<>();
+						long total = 0;
+						int i = 0;
+						final List<CollectionCluster> clusters = new ArrayList<>();
 
-					if (conf.useRSI) {
-						rsi = ReactiveStreamsIngestion
-								.builder()
-								.url("jdbc:oracle:thin:@" + conf.destinationConnectionString)
-								.username(conf.destinationUsername)
-								.password(conf.destinationPassword)
-								.schema(conf.destinationUsername)
-								.executor(rsiWorkerThreadPool)
-								//.bufferInterval(Duration.ofMillis(1000L))
-								.bufferRows(conf.RSIbufferRows /*49676730*/)
-								.rowsPerBatch(conf.batchSize)
+						if (conf.useRSI) {
+							rsi = ReactiveStreamsIngestion
+									.builder()
+									.url("jdbc:oracle:thin:@" + conf.destinationConnectionString)
+									.username(conf.destinationUsername)
+									.password(conf.destinationPassword)
+									.schema(conf.destinationUsername)
+									.executor(rsiWorkerThreadPool)
+									//.bufferInterval(Duration.ofMillis(1000L))
+									.bufferRows(conf.RSIbufferRows /*49676730*/)
+									.rowsPerBatch(conf.batchSize)
 //                            .averageMessageSize(32*1024*1024)
-								//.bufferInterval(Duration.ofSeconds(20))
+									//.bufferInterval(Duration.ofSeconds(20))
 //                            .bufferInterval(Duration.ofSeconds(1L))
-								.table(collectionName)
-								.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT"})
-								.useDirectPath()
-								.useDirectPathNoLog()
-								.useDirectPathParallel()
-								.useDirectPathSkipIndexMaintenance()
-								.useDirectPathSkipUnusableIndexes()
-								.useDirectPathStorageInit(String.valueOf(8 * 1024 * 1024))
-								.useDirectPathStorageNext(String.valueOf(8 * 1024 * 1024))
-								.build();
-					}
-
-					for (CompletableFuture<CollectionCluster> publishingCf : publishingCfs) {
-						CollectionCluster cc = publishingCf.join();
-						clusters.add(cc);
-
-						if (cc.count > 0) {
-							total += cc.count;
-							mongoDBCollectionClusters.add(cc);
-
-							final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
-							publishingCfsConvert.add(pCf);
-							if (conf.useRSI) {
-								workerThreadPool.execute(AUTONOMOUS_DATABASE ? new RSIBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize) :
-										new RSIBSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize));
-							}
-							else if (conf.useMemoptimizeForWrite) {
-								workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
-							}
-							else {
-								workerThreadPool.execute(AUTONOMOUS_DATABASE ||conf.mongodbAPICompatible || conf.forceOSON? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
-										new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
-							}
-
-							i++;
+									.table(collectionName)
+									.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT"})
+									.useDirectPath()
+									.useDirectPathNoLog()
+									.useDirectPathParallel()
+									.useDirectPathSkipIndexMaintenance()
+									.useDirectPathSkipUnusableIndexes()
+									.useDirectPathStorageInit(String.valueOf(8 * 1024 * 1024))
+									.useDirectPathStorageNext(String.valueOf(8 * 1024 * 1024))
+									.build();
 						}
-					}
 
-					//System.out.println("Docs: " + total + " for " + mongoDBCollectionClusters.size() + " cluster(s)");
-					//println(Console.Style.ANSI_BLUE + "Collection clustering analysis duration: " + getDurationSince(startClusterAnalysis));
+						for (CompletableFuture<CollectionCluster> publishingCf : publishingCfs) {
+							CollectionCluster cc = publishingCf.join();
+							clusters.add(cc);
 
-					clusters.clear();
+							if (cc.count > 0) {
+								total += cc.count;
+								mongoDBCollectionClusters.add(cc);
 
-					final List<ConversionInformation> informations = publishingCfsConvert.stream().map(CompletableFuture::join).collect(toList());
+								final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
+								publishingCfsConvert.add(pCf);
+								if (conf.useRSI) {
+									workerThreadPool.execute(AUTONOMOUS_DATABASE ? new RSIBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize) :
+											new RSIBSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize));
+								}
+								else if (conf.useMemoptimizeForWrite) {
+									workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
+								}
+								else {
+									workerThreadPool.execute(AUTONOMOUS_DATABASE || conf.mongodbAPICompatible || conf.forceOSON ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
+											new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
+								}
 
-					for (ConversionInformation ci : informations) {
-						if (ci.exception != null) {
-							LOGGER.error("Error during ingestion!", ci.exception);
+								i++;
+							}
 						}
-					}
 
-					if (conf.useRSI) {
-						rsi.close();
+						//System.out.println("Docs: " + total + " for " + mongoDBCollectionClusters.size() + " cluster(s)");
+						//println(Console.Style.ANSI_BLUE + "Collection clustering analysis duration: " + getDurationSince(startClusterAnalysis));
+
+						clusters.clear();
+
+						final List<ConversionInformation> informations = publishingCfsConvert.stream().map(CompletableFuture::join).collect(toList());
+
+						for (ConversionInformation ci : informations) {
+							if (ci.exception != null) {
+								LOGGER.error("Error during ingestion!", ci.exception);
+							}
+						}
+
+						if (conf.useRSI) {
+							rsi.close();
+						}
 					}
 
 					// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
-					oracleCollectionInfo.finish(mediumPDS, mongoCollection, null, conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes);
+					oracleCollectionInfo.finish(mediumPDS, mongoCollection, null, conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes, conf.buildSecondaryIndexes);
 					//gui.finishCollection();
 
 				}

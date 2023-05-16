@@ -64,7 +64,8 @@ public class OracleCollectionInfo {
 
 
 	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection,
-																	 boolean autonomousDatabase, boolean useMemoptimizeForWrite, boolean mongoDBAPICompatible, boolean forceOSON) throws SQLException, OracleException {
+																	 boolean autonomousDatabase, boolean useMemoptimizeForWrite, boolean mongoDBAPICompatible, boolean forceOSON,
+																	 boolean buildSecondaryIndexes) throws SQLException, OracleException {
 		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName, autonomousDatabase);
 
 		try (Connection c = adminPDS.getConnection()) {
@@ -119,7 +120,7 @@ public class OracleCollectionInfo {
 								}
 								else {
 									// avoid migrating data into non empty destination collection (no conflict to manage)
-									ret.emptyDestinationCollection = false;
+									ret.emptyDestinationCollection = buildSecondaryIndexes;
 									return ret;
 								}
 							}
@@ -360,72 +361,77 @@ public class OracleCollectionInfo {
 	 * @param skipSecondaryIndexes
 	 * @throws SQLException
 	 */
-	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, MongoDBMetadata collectionMetadataDump, int maxParallelDegree, ASCIIGUI gui, boolean mongoDBAPICompatible, boolean skipSecondaryIndexes) throws SQLException, OracleException {
+	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, MongoDBMetadata collectionMetadataDump, int maxParallelDegree, ASCIIGUI gui, boolean mongoDBAPICompatible, boolean skipSecondaryIndexes, boolean buildSecondaryIndexes) throws SQLException, OracleException {
 		try (Connection c = mediumPDS.getConnection()) {
 			try (Statement s = c.createStatement()) {
-				LOGGER.info("Enabling JSON constraint...");
-				if (isJsonConstraintName != null) {
-					LOGGER.info("Re-Enabling Is JSON constraint NOVALIDATE");
-					s.execute("alter table " + collectionName + " modify constraint " + isJsonConstraintName + " enable novalidate");
+				if(!buildSecondaryIndexes) {
+					LOGGER.info("Enabling JSON constraint...");
+					if (isJsonConstraintName != null) {
+						LOGGER.info("Re-Enabling Is JSON constraint NOVALIDATE");
+						s.execute("alter table " + collectionName + " modify constraint " + isJsonConstraintName + " enable novalidate");
+					}
+					else {
+						LOGGER.info("Creating Is JSON constraint NOVALIDATE");
+						s.execute("alter table " + collectionName + " add constraint " + collectionName + "_jd_is_json check (" + (mongoDBAPICompatible ? "data" : "json_document") + " is json format oson (size limit 32m)) novalidate");
+					}
+					LOGGER.info("OK");
 				}
-				else {
-					LOGGER.info("Creating Is JSON constraint NOVALIDATE");
-					s.execute("alter table " + collectionName + " add constraint " + collectionName + "_jd_is_json check (" + (mongoDBAPICompatible ? "data" : "json_document") + " is json format oson (size limit 32m)) novalidate");
-				}
-				LOGGER.info("OK");
 
-				gui.startIndex("primary key");
-
-				LOGGER.info("Adding primary key constraint and index...");
 				// MOS 473656.1
 				s.execute("ALTER SESSION ENABLE PARALLEL DDL");
-				long start = System.currentTimeMillis();
-				if (primaryKeyIndexName != null) {
-					String currentPKIndexStatus = "?";
-					try (PreparedStatement p = c.prepareStatement("select status from all_indexes where table_owner=? and table_name=? and index_name=? and uniqueness='UNIQUE' and constraint_index='YES'")) {
-						p.setString(1, user);
-						p.setString(2, collectionName.toUpperCase());
-						p.setString(3, primaryKeyIndexName);
 
-						try (ResultSet r = p.executeQuery()) {
-							if (r.next()) {
-								currentPKIndexStatus = r.getString(1);
+				if(!buildSecondaryIndexes) {
+					gui.startIndex("primary key");
+
+					LOGGER.info("Adding primary key constraint and index...");
+					long start = System.currentTimeMillis();
+					if (primaryKeyIndexName != null) {
+						String currentPKIndexStatus = "?";
+						try (PreparedStatement p = c.prepareStatement("select status from all_indexes where table_owner=? and table_name=? and index_name=? and uniqueness='UNIQUE' and constraint_index='YES'")) {
+							p.setString(1, user);
+							p.setString(2, collectionName.toUpperCase());
+							p.setString(3, primaryKeyIndexName);
+
+							try (ResultSet r = p.executeQuery()) {
+								if (r.next()) {
+									currentPKIndexStatus = r.getString(1);
+								}
+							}
+						}
+
+						if (false && autonomousDatabase && "UNUSABLE".equalsIgnoreCase(currentPKIndexStatus)) {
+
+
+							LOGGER.info("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+							s.execute("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+							LOGGER.info("Rebuild PK index with parallel degree of " + (2 * maxParallelDegree) + " in " + getDurationSince(start));
+						}
+						else {
+							LOGGER.info("PK Index status is: " + currentPKIndexStatus);
+							if ("?".equals(currentPKIndexStatus)) {
+								LOGGER.info("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + "." + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+								s.execute("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + "." + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+								LOGGER.info("ALTER TABLE " + user + "." + collectionName + " ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
+								s.execute("ALTER TABLE " + user + "." + collectionName + " ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
+								LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 							}
 						}
 					}
-
-					if (false && autonomousDatabase && "UNUSABLE".equalsIgnoreCase(currentPKIndexStatus)) {
-
-
-						LOGGER.info("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-						s.execute("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-						LOGGER.info("Rebuild PK index with parallel degree of " + (2 * maxParallelDegree) + " in " + getDurationSince(start));
-					}
 					else {
-						LOGGER.info("PK Index status is: " + currentPKIndexStatus);
-						if ("?".equals(currentPKIndexStatus)) {
-							LOGGER.info("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + "." + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-							s.execute("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + "." + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-							LOGGER.info("ALTER TABLE " + user + "." + collectionName + " ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
-							s.execute("ALTER TABLE " + user + "." + collectionName + " ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
+						try {
+							LOGGER.info("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON " + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+							s.execute("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON " + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+							LOGGER.info("ALTER TABLE " + collectionName + " ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
+							s.execute("ALTER TABLE " + collectionName + " ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
 							LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 						}
+						catch (SQLException sqle) {
+							sqle.printStackTrace();
+						}
 					}
-				}
-				else {
-					try {
-						LOGGER.info("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON " + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-						s.execute("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON " + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-						LOGGER.info("ALTER TABLE " + collectionName + " ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
-						s.execute("ALTER TABLE " + collectionName + " ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
-						LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
-					}
-					catch (SQLException sqle) {
-						sqle.printStackTrace();
-					}
-				}
 
-				gui.endIndex("primary key");
+					gui.endIndex("primary key");
+				}
 
 				// manage other MongoDB indexes
 				int mongoDBIndex = 0;
@@ -507,7 +513,7 @@ public class OracleCollectionInfo {
 													"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getString("name"), collectionName, spatialColumn);
 
 									LOGGER.info(SQLStatement);
-									start = System.currentTimeMillis();
+									long start = System.currentTimeMillis();
 									gui.startIndex(indexMetadata.getString("name"));
 									s.execute(SQLStatement);
 									LOGGER.info("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
@@ -518,7 +524,7 @@ public class OracleCollectionInfo {
 									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getString("name"), getCreateIndexColumns(collectionName, keys, fieldsInfo), indexMetadata.getBoolean("unique"));
 
 									LOGGER.info(indexSpec);
-									start = System.currentTimeMillis();
+									long start = System.currentTimeMillis();
 									gui.startIndex(indexMetadata.getString("name"));
 									sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
 									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
@@ -536,7 +542,7 @@ public class OracleCollectionInfo {
                         System.out.println("Manual sync of Search Index done in " + getDurationSince(start));
                     }*/
 
-							start = System.currentTimeMillis();
+							long start = System.currentTimeMillis();
 							gui.startIndex("search_index");
 							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
 							LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
@@ -618,7 +624,7 @@ public class OracleCollectionInfo {
 													"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getName(), collectionName, spatialColumn);
 
 									LOGGER.info(SQLStatement);
-									start = System.currentTimeMillis();
+									long start = System.currentTimeMillis();
 									gui.startIndex(indexMetadata.getName());
 									s.execute(SQLStatement);
 									LOGGER.info("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
@@ -629,7 +635,7 @@ public class OracleCollectionInfo {
 									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getName(), getCreateIndexColumns(collectionName, indexMetadata.getKey(), fieldsInfo), indexMetadata.isUnique());
 
 									LOGGER.info(indexSpec);
-									start = System.currentTimeMillis();
+									long start = System.currentTimeMillis();
 									gui.startIndex(indexMetadata.getName());
 									sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
 									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
@@ -647,7 +653,7 @@ public class OracleCollectionInfo {
                         System.out.println("Manual sync of Search Index done in " + getDurationSince(start));
                     }*/
 
-							start = System.currentTimeMillis();
+							long start = System.currentTimeMillis();
 							gui.startIndex("search_index");
 							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
 							LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
