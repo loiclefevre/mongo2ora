@@ -26,6 +26,10 @@ public class MetadataIndex {
 	private MetadataKey key;
 	private boolean warning;
 
+	private boolean ttl;
+
+	private ExpireAfterSeconds expireAfterSeconds;
+
 	public MetadataIndex() {
 	}
 
@@ -60,6 +64,23 @@ public class MetadataIndex {
 
 	public void setKey(MetadataKey key) {
 		this.key = key;
+	}
+
+	public boolean isTtl() {
+		return ttl;
+	}
+
+	public void setTtl(boolean ttl) {
+		this.ttl = ttl;
+	}
+
+	public ExpireAfterSeconds getExpireAfterSeconds() {
+		return expireAfterSeconds;
+	}
+
+	public void setExpireAfterSeconds(ExpireAfterSeconds expireAfterSeconds) {
+		ttl = true;
+		this.expireAfterSeconds = expireAfterSeconds;
 	}
 
 	public void createIndex(String collectionName, PoolDataSource pds, final Map<String, Integer> maxLengths, final Map<String, Set<String>> fieldsDataTypes, Set<String> cantIndex, Properties oracleMetadata) throws Exception {

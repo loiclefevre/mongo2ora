@@ -4,6 +4,8 @@ public class MongoDBMetadata {
 	private MetadataOptions options;
 	private MetadataIndex[] indexes;
 
+	private String collectionName;
+
 	public MongoDBMetadata() {
 	}
 
@@ -21,5 +23,13 @@ public class MongoDBMetadata {
 
 	public void setIndexes(MetadataIndex[] indexes) {
 		this.indexes = indexes;
+	}
+
+	public String getCollectionName() {
+		return collectionName;
+	}
+
+	public void setCollectionName(String collectionName) {
+		this.collectionName = collectionName;
 	}
 }

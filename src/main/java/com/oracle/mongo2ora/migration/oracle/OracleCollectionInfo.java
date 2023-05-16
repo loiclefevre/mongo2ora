@@ -1,5 +1,8 @@
 package com.oracle.mongo2ora.migration.oracle;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.diagnostics.logging.Logger;
@@ -8,6 +11,7 @@ import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.mongodb.IndexColumn;
 import com.oracle.mongo2ora.migration.mongodb.MetadataIndex;
 import com.oracle.mongo2ora.migration.mongodb.MetadataKey;
+import com.oracle.mongo2ora.migration.mongodb.MetadataKeyDeserializer;
 import com.oracle.mongo2ora.migration.mongodb.MongoDBMetadata;
 import oracle.soda.OracleCollection;
 import oracle.soda.OracleDatabase;
@@ -16,6 +20,10 @@ import oracle.soda.rdbms.OracleRDBMSClient;
 import oracle.ucp.jdbc.PoolDataSource;
 import org.bson.Document;
 
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -24,9 +32,11 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
+import java.util.zip.GZIPInputStream;
 
 import static com.oracle.mongo2ora.util.Tools.getDurationSince;
 
@@ -450,13 +460,17 @@ public class OracleCollectionInfo {
 
 						for (Document indexMetadata : mongoCollection.listIndexes()) {
 							LOGGER.info(indexMetadata.toString());
+							if(indexMetadata.getLong("expireAfterSeconds") != null) {
+								LOGGER.warn("TTL index "+indexMetadata.getString("name")+" with data expiration after " +indexMetadata.getLong("expireAfterSeconds")+" seconds not recreated!");
+							}
+							else
 							if (indexMetadata.getString("name").contains("$**") || "text".equals(indexMetadata.getEmbedded(Arrays.asList("key"), Document.class).getString("_fts"))) {
 								needSearchIndex = true; //System.out.println("Need Search Index");
 							}
-							else if (indexMetadata.getString("name").equals("_id_")) {
+							/*else if (indexMetadata.getString("name").equals("_id_")) {
 								// skipping primary key as it already exists now!
 								continue;
-							}
+							}*/
 							else {
 								final Document keys = indexMetadata.getEmbedded(Arrays.asList("key"), Document.class);
 								boolean spatial = false;
@@ -564,13 +578,17 @@ public class OracleCollectionInfo {
 
 						for (MetadataIndex indexMetadata : collectionMetadataDump.getIndexes()) {
 							LOGGER.info(indexMetadata.toString());
+							if(indexMetadata.isTtl()) {
+								LOGGER.warn("TTL index "+indexMetadata.getName()+" with data expiration after " +indexMetadata.getExpireAfterSeconds().value+" seconds not recreated!");
+							}
+							else
 							if (indexMetadata.getName().contains("$**") || indexMetadata.getKey().text) {
 								needSearchIndex = true; //System.out.println("Need Search Index");
 							}
-							else if (indexMetadata.getName().equals("_id_")) {
+							/*else if (indexMetadata.getName().equals("_id_")) {
 								// skipping primary key as it already exists now!
 								continue;
-							}
+							}*/
 							else {
 
 								boolean spatial = false;
@@ -761,7 +779,7 @@ public class OracleCollectionInfo {
 		return s.toString();
 	}
 
-	private String getCreateIndexColumns(String collectionName, MetadataKey keys, Map<String, FieldInfo> fieldsInfo) {
+	private static String getCreateIndexColumns(String collectionName, MetadataKey keys, Map<String, FieldInfo> fieldsInfo) {
 		final StringBuilder s = new StringBuilder();
 
 		for (IndexColumn column : keys.columns) {
@@ -897,6 +915,125 @@ public class OracleCollectionInfo {
 			this.path = path;
 			this.type = type;
 			this.length = length;
+		}
+	}
+
+	public static void main(String[] args) {
+		String fileName = args[0];
+		File collectionMetadata= new File(fileName);
+
+		final ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+		final SimpleModule indexKeyModule = new SimpleModule();
+		indexKeyModule.addDeserializer(MetadataKey.class, new MetadataKeyDeserializer());
+		mapper.registerModule(indexKeyModule);
+		try (InputStream inputStream = collectionMetadata.getName().toLowerCase().endsWith(".gz") ?
+				new GZIPInputStream(new FileInputStream(collectionMetadata), 16 * 1024)
+				: new BufferedInputStream(new FileInputStream(collectionMetadata), 16 * 1024)) {
+			MongoDBMetadata[] metadata = mapper.readValue(inputStream, MongoDBMetadata[].class);
+
+			boolean mongoDBAPICompatible = true;
+			int maxParallelDegree = 16;
+
+			System.out.println("ALTER SESSION ENABLE PARALLEL DDL");
+			int index = 0;
+			int ttlIndex=0;
+			int spatialIndex=0;
+			int mongoSearchIndex = 0;
+			int oracleSearchIndex = 0;
+
+			for(MongoDBMetadata m:metadata) {
+				String collectionName = m.getCollectionName();
+				System.out.println("-- Collection: "+collectionName);
+
+				boolean needSearchIndex = false;
+
+
+				for (MetadataIndex indexMetadata : m.getIndexes()) {
+					LOGGER.info(indexMetadata.toString());
+					if(indexMetadata.isTtl()) {
+						System.out.println("-- TTL index "+indexMetadata.getName()+" with data expiration after " +indexMetadata.getExpireAfterSeconds().value+" seconds");
+						ttlIndex++;
+						index++;
+					}
+					else
+					if (indexMetadata.getName().contains("$**") || indexMetadata.getKey().text) {
+						needSearchIndex = true; //System.out.println("Need Search Index");
+						mongoSearchIndex++;
+					}
+					/*else if (indexMetadata.getName().equals("_id_")) {
+						// skipping primary key as it already exists now!
+						continue;
+					}*/
+					else {
+
+						boolean spatial = false;
+						String spatialColumn = "";
+						if (indexMetadata.getKey().spatial) {
+							spatialColumn = indexMetadata.getKey().columns.get(0).name;
+							spatial = true;
+						}
+
+						if (spatial) {
+							LOGGER.info("Spatial index");
+
+							boolean allDocsHavePoints = false;
+
+
+							final String SQLStatement = String.format(
+									"create index %s on %s " +
+											"(JSON_VALUE(" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", '$.%s' returning SDO_GEOMETRY ERROR ON ERROR NULL ON EMPTY)) " +
+											"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getName(), collectionName, spatialColumn);
+
+							LOGGER.info(SQLStatement);
+							long start = System.currentTimeMillis();
+							System.out.println(SQLStatement);
+							index++;
+							spatialIndex++;
+							LOGGER.info("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+						}
+						else {
+							LOGGER.info("Normal index");
+							Map<String,FieldInfo> fieldsInfo = new HashMap<>();
+							final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getName(),
+									getCreateIndexColumns(collectionName, indexMetadata.getKey(), fieldsInfo), indexMetadata.isUnique());
+
+							LOGGER.info(indexSpec);
+							long start = System.currentTimeMillis();
+							System.out.println(indexSpec);
+							index++;
+							LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+						}
+					}
+				}
+
+				if (needSearchIndex) {
+                    /*try (CallableStatement cs = c.prepareCall("{CALL CTX_DDL.SYNC_INDEX(idx_name => ?, memory => '512M', parallel_degree => ?, locking => CTX_DDL.LOCK_NOWAIT)}")) {
+                        cs.setString(1, collectionName + "$search_index");
+                        cs.setInt(2, maxParallelDegree);
+                        start = System.currentTimeMillis();
+                        cs.execute();
+                        System.out.println("Manual sync of Search Index done in " + getDurationSince(start));
+                    }*/
+
+					long start = System.currentTimeMillis();
+					System.out.println(String.format("CREATE SEARCH INDEX %s$search_index ON %s (" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
+					LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
+					index++;
+					oracleSearchIndex++;
+				}
+
+				LOGGER.info("OK");
+			}
+
+			System.out.println("ALTER SESSION DISABLE PARALLEL DDL");
+			System.out.println("-- Total number of indexes: "+index);
+			System.out.println("-- . including spatial indexes: "+spatialIndex);
+			System.out.println("-- . including search indexes: "+oracleSearchIndex+(oracleSearchIndex < mongoSearchIndex ? " replacing "+mongoSearchIndex+" MongoDB search index(es)" : ""));
+			System.out.println("-- . including TTL indexes: "+ttlIndex);
+
+
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 }

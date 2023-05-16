@@ -52,6 +52,7 @@ public class Configuration {
 	public boolean mongodbAPICompatible;
 	public boolean forceOSON;
 	public boolean skipSecondaryIndexes;
+	public boolean buildSecondaryIndexes;
 
 	public static Configuration prepareConfiguration(String[] args) {
 		Configuration conf = new Configuration();
@@ -65,6 +66,10 @@ public class Configuration {
 
 				case "--oson":
 					conf.forceOSON = true;
+					break;
+
+				case "--build-secondary-indexes":
+					conf.buildSecondaryIndexes = true;
 					break;
 
 				case "--skip-secondary-indexes":
