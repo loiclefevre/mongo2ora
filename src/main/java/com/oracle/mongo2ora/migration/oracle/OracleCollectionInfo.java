@@ -521,7 +521,8 @@ public class OracleCollectionInfo {
 								}
 								else {
 									LOGGER.info("Normal index");
-									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getString("name"), getCreateIndexColumns(collectionName, keys, fieldsInfo), indexMetadata.getBoolean("unique"));
+									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getString("name"), getCreateIndexColumns(collectionName, keys, fieldsInfo),
+											indexMetadata.getBoolean("unique") == null ? "false" : indexMetadata.getBoolean("unique"));
 
 									LOGGER.info(indexSpec);
 									long start = System.currentTimeMillis();
