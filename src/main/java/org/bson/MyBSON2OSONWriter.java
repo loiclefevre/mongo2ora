@@ -308,7 +308,7 @@ public class MyBSON2OSONWriter implements BsonWriter {
 			gen.writeId(objectId.toByteArray());
 		} else {
 			//gen.write(this.getName(), _id);
-			gen.writeKey(this.getName());
+			//gen.writeKey(this.getName());
 			gen.writeId(objectId.toByteArray());
 			//gen.write("test_buffer", "XDLKFQMLQKSDMFLKQSDMLFKQSMDLFKQSMDLFKMQSLDFKMLQSDFKMIPQOQSFKIDIPDIFDIFPFIDISFDSPQSDOFILQSDKFLQKSDFAA");
 		}
@@ -324,7 +324,7 @@ public class MyBSON2OSONWriter implements BsonWriter {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.writeId(objectId);
 		} else {
-			gen.writeKey(this.getName());
+			//gen.writeKey(this.getName());
 			gen.writeId(objectId);
 			//gen.write("test_buffer", "XDLKFQMLQKSDMFLKQSDMLFKQSMDLFKQSMDLFKMQSLDFKMLQSDFKMIPQOQSFKIDIPDIFDIFPFIDISFDSPQSDOFILQSDKFLQKSDFAA");
 		}
