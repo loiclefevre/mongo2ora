@@ -1,5 +1,7 @@
 package org.bson;
 
+import java.io.FileOutputStream;
+
 public class MyBSONDecoder {
 	protected final boolean outputOsonFormat;
 	protected int bsonLength;
@@ -13,6 +15,7 @@ public class MyBSONDecoder {
 	}
 
 	public void convertBSONToOSON(final RawBsonDocument doc) {
+		//System.out.println(doc);
 		reader.reset(doc);
 		writer.reset();
 		writer.pipe(reader);
@@ -31,12 +34,38 @@ public class MyBSONDecoder {
 		return writer.getOid();
 	}
 
-/*
-    public static void main(String[] args) {
 
-        String j="{\"_id\": {\"$oid\": \"61685df979fb4978a7be0a12\"}, \"test\": {\"_id\":{\"$oid\":\"61685df979fb4978a7be0a13\"}}, \"movie_id\": 1, \"sku\": \"COO3790\", \"list_price\": 3.99, \"wiki_article\": \"'Gator_Bait_II:_Cajun_Justice\", \"title\": \"'Gator Bait II: Cajun Justice\", \"opening_date\": \"1988-01-01\", \"year\": 1988, \"views\": 6, \"cast\": null, \"crew\": [{\"job\": \"director\", \"names\": [\"Beverly Sebastion\"]}, {\"job\": \"screenwriter\", \"names\": [\"Beverly Sebastion\"]}], \"studio\": null, \"runtime\": 95, \"budget\": null, \"gross\": null, \"genre\": [\"Thriller\"], \"main_subject\": null, \"awards\": null, \"nominations\": null, \"image_url\": \"https://upload.wikimedia.org/wikipedia/en/9/91/Gatorbait2.jpg\", \"summary\": \"'  Gator Bait II: Cajun Justice is a 1988 sequel to the 1974 film 'Gator Bait , written, produced and directed by Beverly Sebastian and Ferd Sebastian. Largely ignored upon release, the film received a second life on cable television and home video.\"}";
-        new MyBSONDecoder(true).convertBSONToOSON(RawBsonDocument.parse(j));
-    }
+	public static void main(String[] args) throws Throwable {
+
+		/*String j="{\"_id\": {\"$oid\": \"61685df979fb4978a7be0a12\"}, \"test\": {\"_id\":{\"$oid\":\"61685df979fb4978a7be0a13\"}}, \"movie_id\": 1, \"sku\": \"COO3790\", \"list_price\": 3.99, \"wiki_article\": \"'Gator_Bait_II:_Cajun_Justice\", \"title\": \"'Gator Bait II: Cajun Justice\", \"opening_date\": \"1988-01-01\", \"year\": 1988, \"views\": 6, \"cast\": null, \"crew\": [{\"job\": \"director\", \"names\": [\"Beverly Sebastion\"]}, {\"job\": \"screenwriter\", \"names\": [\"Beverly Sebastion\"]}], \"studio\": null, \"runtime\": 95, \"budget\": null, \"gross\": null, \"genre\": [\"Thriller\"], \"main_subject\": null, \"awards\": null, \"nominations\": null, \"image_url\": \"https://upload.wikimedia.org/wikipedia/en/9/91/Gatorbait2.jpg\", \"summary\": \"'  Gator Bait II: Cajun Justice is a 1988 sequel to the 1974 film 'Gator Bait , written, produced and directed by Beverly Sebastian and Ferd Sebastian. Largely ignored upon release, the film received a second life on cable television and home video.\"}";*/
+
+		String j = "{\"_id\":{\"$oid\":\"6482ed016c008c89fcb2d017\"},\"fechaValor\":{\"$date\":\"2023-06-06T00:00:00Z\"},\"idContrato\":\"004900013003049005\",\"idMov\":\"2023060621032120118000019004900013003049005000658IP29100490001\",\"centroOrigen\":\"0001\",\"codigoOperacion\":\"069\",\"codigoOperacionBancaria\":\"044\",\"codigoOperacionBasica\":\"050\",\"descripcion\":\"BIZUM DE Mirabel Madrigal CONCEPTO Concepto de prueba\",\"descripcionGenerica\":\"APLICACION DE ORDENES\",\"divisa\":\"EUR\",\"empresaOrigen\":\"0049\",\"estado\":\"NR\",\"fechaAnotacion\":{\"$date\":\"2023-06-09T00:00:00Z\"},\"fechaContable\":{\"$date\":\"2023-06-06T00:00:00Z\"},\"fechaOperacion\":{\"$date\":\"2023-06-06T21:03:21.201Z\"},\"importe\":{\"$numberDecimal\":\"0.01\"},\"numDgo\":658,\"numMovimiento\":19,\"numOrden\":19,\"numeroDocumento\":\"\",\"posicionSaldo\":\"000\",\"referencia1\":\"\",\"referencia2\":\"\",\"saldo\":{\"$numberDecimal\":\"18672.88\"},\"signoMovimiento\":\"Haber\",\"terminalBTO\":\"IP291\",\"timestamps\":{\"tsOBMOVTOS1\":2.0231572103212365E+18},\"tipoOperacion\":\"ABONO-TRANSFERENCIA\",\"tsAbInitio\":\"1686078201886\",\"tsHost\":\"1686078201251\",\"transactionInternalReference\":\"004900017650189164\"}";
+		MyBSONDecoder dec = new MyBSONDecoder(true);
+		dec.convertBSONToOSON(RawBsonDocument.parse(j));
+		FileOutputStream o = new FileOutputStream("test.oson.out");
+		o.write(dec.getOSONData());
+		o.close();
+
+
+//		Class.forName("oracle.jdbc.driver.OracleDriver");
+//
+//		try (Connection c = DriverManager.getConnection("jdbc:oracle:thin:@localhost/freepdb1","developer","free")) {
+//			try (Statement s = c.createStatement()) {
+//				try (ResultSet r = s.executeQuery("select m.data from movimientos1 m where m.data.\"_id\"='6482ed016c008c89fcb2d017'")) {
+//					if(r.next()) {
+//						Blob b = r.getBlob(1);
+//						Files.copy(b.getBinaryStream(),new File("movimientos1.oson").toPath(), StandardCopyOption.REPLACE_EXISTING);
+//					}
+//				}
+//				try (ResultSet r = s.executeQuery("select to_blob(oson(m.data)) from movimientos_restore m where m.data.\"_id\".string()='6482ed016c008c89fcb2d017'")) {
+//					if(r.next()) {
+//						Blob b = r.getBlob(1);
+//						Files.copy(b.getBinaryStream(),new File("movimientos_restore.oson").toPath(), StandardCopyOption.REPLACE_EXISTING);
+//					}
+//				}
+//			}
+//		}
+	}
 
 /*
     public static void main(String[] args) throws Throwable {

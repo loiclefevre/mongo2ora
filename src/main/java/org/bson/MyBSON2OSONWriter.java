@@ -299,16 +299,17 @@ public class MyBSON2OSONWriter implements BsonWriter {
 
 	@Override
 	public void writeObjectId(final ObjectId objectId) {
-		final String _id = objectId.toString();
-
 		if (oid == null && "_id".equals(this.getName())) {
-			oid = _id;
+			oid = objectId.toString();
 		}
 
 		if (context.getContextType() == BsonContextType.ARRAY) {
-			gen.write(_id);
+			//gen.write(_id);
+			gen.writeId(objectId.toByteArray());
 		} else {
-			gen.write(this.getName(), _id);
+			//gen.write(this.getName(), _id);
+			gen.writeKey(this.getName());
+			gen.writeId(objectId.toByteArray());
 			//gen.write("test_buffer", "XDLKFQMLQKSDMFLKQSDMLFKQSMDLFKQSMDLFKMQSLDFKMLQSDFKMIPQOQSFKIDIPDIFDIFPFIDISFDSPQSDOFILQSDKFLQKSDFAA");
 		}
 		state = getNextState();
@@ -316,17 +317,15 @@ public class MyBSON2OSONWriter implements BsonWriter {
 
 
 	public void writeObjectId2(final byte[] objectId) {
-
-		final String _id = toHexString(objectId);
-
 		if (oid == null && "_id".equals(this.getName())) {
-			oid = _id;
+			oid = toHexString(objectId);
 		}
 
 		if (context.getContextType() == BsonContextType.ARRAY) {
-			gen.write(_id);
+			gen.writeId(objectId);
 		} else {
-			gen.write(this.getName(), _id);
+			gen.writeKey(this.getName());
+			gen.writeId(objectId);
 			//gen.write("test_buffer", "XDLKFQMLQKSDMFLKQSDMLFKQSMDLFKQSMDLFKMQSLDFKMLQSDFKMIPQOQSFKIDIPDIFDIFPFIDISFDSPQSDOFILQSDKFLQKSDFAA");
 		}
 		state = getNextState();
