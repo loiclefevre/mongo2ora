@@ -99,7 +99,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 
 					final byte[] version = "1".getBytes();
 
-					LOGGER.warn("Preparing direct path API with table: "+tableName);
+					//LOGGER.warn("Preparing direct path API with table: "+tableName);
 
 					try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), "\""+tableName+"\"", null, new String[]{"ID", "VERSION", mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT"} /* String.format("p%d", partitionId),*/)) {
 						final MyBSONDecoder decoder = new MyBSONDecoder(true);
