@@ -105,7 +105,7 @@ public class OracleCollectionInfo {
 
 				if (sodaCollection == null) {
 					LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does not exist => creating it");
-					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName) : createClassicCollection(db, ret.collectionName, forceOSON);
+					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON) : createClassicCollection(db, ret.collectionName, forceOSON);
 					if (sodaCollection == null) {
 						throw new IllegalStateException("Can't create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
 					}
@@ -126,7 +126,7 @@ public class OracleCollectionInfo {
 									// TODO 21c+ => JSON
 									// TODO 19c => BLOB if not autonomous database and not mongodb api compatible
 									// TODO 19c => BLOB OSON if autonomous database or not mongodb api compatible
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName) : createClassicCollection(db, ret.collectionName, forceOSON);
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON) : createClassicCollection(db, ret.collectionName, forceOSON);
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
 									}
@@ -145,7 +145,7 @@ public class OracleCollectionInfo {
 									LOGGER.warn((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
 									LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName) : createClassicCollection(db, ret.collectionName, forceOSON);
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON) : createClassicCollection(db, ret.collectionName, forceOSON);
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
 									}
@@ -288,11 +288,11 @@ public class OracleCollectionInfo {
 	/**
 	 *
 	 */
-	private static OracleCollection createMongoDBAPICompatibleCollection(OracleDatabase db, String collectionName) throws SQLException, OracleException {
+	private static OracleCollection createMongoDBAPICompatibleCollection(OracleDatabase db, String collectionName, boolean forceOSON) throws SQLException, OracleException {
 		final int version = db.admin().getConnection().getMetaData().getDatabaseMajorVersion();
 
 		try (CallableStatement cs = db.admin().getConnection().prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
-			final String metadata = version == 19 ?
+			final String metadata = version == 19 || forceOSON ?
 					"""
 							{
 								"contentColumn" : {
