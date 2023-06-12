@@ -34,10 +34,12 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 	private final ASCIIGUI gui;
 	private final int batchSize;
 	private final String collectionName;
+	private final String tableName;
 
-	public DirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize) {
+	public DirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
+		this.tableName=tableName;
 		this.work = work;
 		this.publishingCf = publishingCf;
 		this.database = database;
@@ -95,7 +97,7 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 
 					// Reactive Streaming Ingestion
 
-					try (PreparedStatement p = ((OracleConnection) c).prepareDirectPath(pds.getUser().toUpperCase(), collectionName, new String[]{"ID", "VERSION", "JSON_DOCUMENT"},/* String.format("p%d", partitionId),*/ directPathLoadProperties)) {
+					try (PreparedStatement p = ((OracleConnection) c).prepareDirectPath(pds.getUser().toUpperCase(), "\""+tableName+"\"", new String[]{"ID", "VERSION", "JSON_DOCUMENT"},/* String.format("p%d", partitionId),*/ directPathLoadProperties)) {
 						//try (PreparedStatement p = c.prepareStatement("insert /*+ append */ into " + collectionName + " (ID, VERSION, JSON_DOCUMENT) values (?,?,?)")) {
                             /*final CharacterSet cs = CharacterSet.make(CharacterSet.AL32UTF8_CHARSET);
                             final CHAR version = new CHAR("1", cs);
