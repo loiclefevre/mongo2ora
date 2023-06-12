@@ -31,10 +31,12 @@ public class RSIBSON2OSONCollectionConverter implements Runnable {
 	private final ASCIIGUI gui;
 	private final int batchSize;
 	private final String collectionName;
+	private final String tableName;
 
-	public RSIBSON2OSONCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, ReactiveStreamsIngestion rsi, ASCIIGUI gui, int batchSize) {
+	public RSIBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, ReactiveStreamsIngestion rsi, ASCIIGUI gui, int batchSize) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
+		this.tableName=tableName;
 		this.work = work;
 		this.publishingCf = publishingCf;
 		this.database = database;

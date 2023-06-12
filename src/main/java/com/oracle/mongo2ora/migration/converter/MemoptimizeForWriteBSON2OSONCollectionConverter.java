@@ -33,10 +33,12 @@ public class MemoptimizeForWriteBSON2OSONCollectionConverter implements Runnable
 	private final ASCIIGUI gui;
 	private final int batchSize;
 	private final String collectionName;
+	private final String tableName;
 
-	public MemoptimizeForWriteBSON2OSONCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize) {
+	public MemoptimizeForWriteBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
+		this.tableName=tableName;
 		this.work = work;
 		this.publishingCf = publishingCf;
 		this.database = database;
@@ -84,7 +86,7 @@ public class MemoptimizeForWriteBSON2OSONCollectionConverter implements Runnable
 
 					// Reactive Streaming Ingestion
 
-					try (PreparedStatement p = c.prepareStatement("insert /*+ memoptimize_write */ into " + collectionName + " (ID, VERSION, JSON_DOCUMENT) values (?,?,?)")) {
+					try (PreparedStatement p = c.prepareStatement("insert /*+ memoptimize_write */ into \"" + tableName + "\" (ID, VERSION, JSON_DOCUMENT) values (?,?,?)")) {
                             /*final CharacterSet cs = CharacterSet.make(CharacterSet.AL32UTF8_CHARSET);
                             final CHAR version = new CHAR("1", cs);
 

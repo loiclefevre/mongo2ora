@@ -568,8 +568,8 @@ public class Main {
 							}
 							else {
 */
-								workerThreadPool.execute(AUTONOMOUS_DATABASE || conf.mongodbAPICompatible || conf.forceOSON ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
-										new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
+								workerThreadPool.execute(AUTONOMOUS_DATABASE || conf.mongodbAPICompatible || conf.forceOSON ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
+										new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 								/*							}
 								 */
 								i++;
@@ -795,7 +795,7 @@ public class Main {
 //                            .averageMessageSize(32*1024*1024)
 									//.bufferInterval(Duration.ofSeconds(20))
 //                            .bufferInterval(Duration.ofSeconds(1L))
-									.table(collectionName)
+									.table(oracleCollectionInfo.getTableName())
 									.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT"})
 									.useDirectPath()
 									.useDirectPathNoLog()
@@ -818,15 +818,15 @@ public class Main {
 								final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
 								publishingCfsConvert.add(pCf);
 								if (conf.useRSI) {
-									workerThreadPool.execute(AUTONOMOUS_DATABASE ? new RSIBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize) :
-											new RSIBSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, rsi, gui, conf.batchSize));
+									workerThreadPool.execute(AUTONOMOUS_DATABASE ? new RSIBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, rsi, gui, conf.batchSize) :
+											new RSIBSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, rsi, gui, conf.batchSize));
 								}
 								else if (conf.useMemoptimizeForWrite) {
-									workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
+									workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 								}
 								else {
-									workerThreadPool.execute(AUTONOMOUS_DATABASE || conf.mongodbAPICompatible || conf.forceOSON ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
-											new BSON2TextCollectionConverter(i % 256, collectionName, cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
+									workerThreadPool.execute(AUTONOMOUS_DATABASE || conf.mongodbAPICompatible || conf.forceOSON ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
+											new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 								}
 
 								i++;

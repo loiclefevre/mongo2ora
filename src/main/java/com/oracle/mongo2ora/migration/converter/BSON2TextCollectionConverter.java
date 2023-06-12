@@ -30,10 +30,12 @@ public class BSON2TextCollectionConverter implements Runnable {
 	private final ASCIIGUI gui;
 	private final int batchSize;
 	private final String collectionName;
+	private final String tableName;
 
-	public BSON2TextCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize) {
+	public BSON2TextCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
+		this.tableName = tableName;
 		this.work = work;
 		this.publishingCf = publishingCf;
 		this.database = database;
@@ -80,7 +82,7 @@ public class BSON2TextCollectionConverter implements Runnable {
 							oracle.jdbc.internal.OracleConnection.CommitOption.NOWAIT);
 
 					//try (PreparedStatement p = ((OracleConnection) c).prepareDirectPath(pds.getUser().toUpperCase(), collectionName, new String[]{"ID", "VERSION", "JSON_DOCUMENT"},/* String.format("p%d", partitionId),*/ directPathLoadProperties)) {
-					try (PreparedStatement p = c.prepareStatement("insert /*+ append */ into " + collectionName + " (ID, VERSION, JSON_DOCUMENT) values (?,?,?)")) {
+					try (PreparedStatement p = c.prepareStatement("insert /*+ append */ into \"" + tableName + "\" (ID, VERSION, JSON_DOCUMENT) values (?,?,?)")) {
 
 						p.setString(2, "1");
 

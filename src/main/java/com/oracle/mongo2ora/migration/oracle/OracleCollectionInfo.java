@@ -937,6 +937,14 @@ public class OracleCollectionInfo {
 		}
 	}
 
+	public String getTableName() {
+		return tableName;
+	}
+
+	public String getCollectionName() {
+		return collectionName;
+	}
+
 	static class FieldInfo {
 		public String path;
 		public String type;

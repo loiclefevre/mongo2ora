@@ -37,10 +37,12 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 	private final String collectionName;
 
 	private final boolean mongoDBAPICompatible;
+	private final String tableName;
 
-	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible) {
+	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
+		this.tableName=tableName;
 		this.work = work;
 		this.publishingCf = publishingCf;
 		this.database = database;
@@ -97,7 +99,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 
 					final byte[] version = "1".getBytes();
 
-					try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), collectionName, null, new String[]{"ID", "VERSION", mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT"} /* String.format("p%d", partitionId),*/)) {
+					try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), tableName, null, new String[]{"ID", "VERSION", mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT"} /* String.format("p%d", partitionId),*/)) {
 						final MyBSONDecoder decoder = new MyBSONDecoder(true);
 
 						while (cursor.hasNext()) {
