@@ -324,7 +324,7 @@ public class MyBSON2OSONWriter implements BsonWriter {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.writeId(objectId);
 		} else {
-			//gen.writeKey(this.getName());
+			gen.writeKey(this.getName());
 			gen.writeId(objectId);
 			//gen.write("test_buffer", "XDLKFQMLQKSDMFLKQSDMLFKQSMDLFKQSMDLFKMQSLDFKMLQSDFKMIPQOQSFKIDIPDIFDIFPFIDISFDSPQSDOFILQSDKFLQKSDFAA");
 		}
