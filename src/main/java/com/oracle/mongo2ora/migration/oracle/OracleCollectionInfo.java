@@ -1,8 +1,5 @@
 package com.oracle.mongo2ora.migration.oracle;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.diagnostics.logging.Logger;
@@ -11,7 +8,6 @@ import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.mongodb.IndexColumn;
 import com.oracle.mongo2ora.migration.mongodb.MetadataIndex;
 import com.oracle.mongo2ora.migration.mongodb.MetadataKey;
-import com.oracle.mongo2ora.migration.mongodb.MetadataKeyDeserializer;
 import com.oracle.mongo2ora.migration.mongodb.MongoDBMetadata;
 import oracle.soda.OracleCollection;
 import oracle.soda.OracleDatabase;
@@ -20,10 +16,6 @@ import oracle.soda.rdbms.OracleRDBMSClient;
 import oracle.ucp.jdbc.PoolDataSource;
 import org.bson.Document;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -32,11 +24,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
-import java.util.zip.GZIPInputStream;
 
 import static com.oracle.mongo2ora.util.Tools.getDurationSince;
 
@@ -80,9 +70,10 @@ public class OracleCollectionInfo {
 			}
 		}
 
-		if( (lowerCaseChar && !upperCaseChar) || (!lowerCaseChar && upperCaseChar)) {
+		if ((lowerCaseChar && !upperCaseChar) || (!lowerCaseChar && upperCaseChar)) {
 			return collectionName.toUpperCase();
-		} else {
+		}
+		else {
 			//mixedCase = true;
 			return collectionName;
 		}
@@ -479,7 +470,7 @@ public class OracleCollectionInfo {
 						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
 
 						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from \"" + tableName + "\" where rownum <= 1000)\n" +
-								"select u.field_path, decode(u.field_path,'$._id','binary',type) as type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
+								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
 							while (r.next()) {
 								String key = r.getString(1);
 								if (!r.wasNull()) {
@@ -544,6 +535,17 @@ public class OracleCollectionInfo {
 									LOGGER.info("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 									gui.endIndex(indexMetadata.getString("name"));
 								}
+								else if (is_IdPK(keys)) {
+									LOGGER.info("_id field index");
+									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [{\"path\": \"_id\", \"order\": \"%s\"}], \"unique\": true}", collectionName + "$" + indexMetadata.getString("name"), keys.getInteger("_id") == 1 ? "asc" : "desc");
+
+									LOGGER.info(indexSpec);
+									long start = System.currentTimeMillis();
+									gui.startIndex(indexMetadata.getString("name"));
+									sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
+									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+									gui.endIndex(indexMetadata.getString("name"));
+								}
 								else {
 									LOGGER.info("Normal index");
 									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getString("name"), getCreateIndexColumns(collectionName, keys, fieldsInfo),
@@ -597,7 +599,7 @@ public class OracleCollectionInfo {
 						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
 
 						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from \"" + tableName + "\" where rownum <= 1000)\n" +
-								"select u.field_path, decode(u.field_path,'$._id','binary',type) as type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
+								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
 							while (r.next()) {
 								String key = r.getString(1);
 								if (!r.wasNull()) {
@@ -655,6 +657,17 @@ public class OracleCollectionInfo {
 									LOGGER.info("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 									gui.endIndex(indexMetadata.getName());
 								}
+								else if (is_IdPK(indexMetadata.getKey())) {
+									LOGGER.info("_id field index");
+									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [{\"path\": \"_id\", \"order\": \"%s\"}], \"unique\": true}", collectionName + "$" + indexMetadata.getName(), getId_PKOrder( indexMetadata.getKey() ));
+
+									LOGGER.info(indexSpec);
+									long start = System.currentTimeMillis();
+									gui.startIndex(indexMetadata.getName());
+									sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
+									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+									gui.endIndex(indexMetadata.getName());
+								}
 								else {
 									LOGGER.info("Normal index");
 									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getName(), getCreateIndexColumns(collectionName, indexMetadata.getKey(), fieldsInfo), indexMetadata.isUnique());
@@ -695,6 +708,38 @@ public class OracleCollectionInfo {
 			LOGGER.error("During finish step of collection " + collectionName, sqle);
 			throw sqle;
 		}
+	}
+
+	private String getId_PKOrder(MetadataKey keys) {
+		for (IndexColumn column : keys.columns) {
+			return column.asc ? "asc" : "desc";
+		}
+
+		return "asc";
+	}
+
+	private boolean is_IdPK(MetadataKey keys) {
+		final StringBuilder s = new StringBuilder();
+		for (IndexColumn column : keys.columns) {
+			if (s.length() > 0) {
+				s.append(", ");
+			}
+			s.append(column.name);
+		}
+
+		return "_id".equals(s.toString());
+	}
+
+	private boolean is_IdPK(Document keys) {
+		final StringBuilder s = new StringBuilder();
+		for (String columnName : keys.keySet()) {
+			if (s.length() > 0) {
+				s.append(", ");
+			}
+			s.append(columnName);
+		}
+
+		return "_id".equals(s.toString());
 	}
 
 	private String getCreateIndexColumns(String collectionName, Document keys, Map<String, FieldInfo> fieldsInfo) {
