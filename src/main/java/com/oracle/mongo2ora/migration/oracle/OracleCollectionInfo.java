@@ -479,7 +479,7 @@ public class OracleCollectionInfo {
 						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
 
 						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from \"" + tableName + "\" where rownum <= 1000)\n" +
-								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
+								"select u.field_path, decode(u.field_path,'$._id','binary',type) as type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
 							while (r.next()) {
 								String key = r.getString(1);
 								if (!r.wasNull()) {
@@ -597,7 +597,7 @@ public class OracleCollectionInfo {
 						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
 
 						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from \"" + tableName + "\" where rownum <= 1000)\n" +
-								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
+								"select u.field_path, decode(u.field_path,'$._id','binary',type) as type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
 							while (r.next()) {
 								String key = r.getString(1);
 								if (!r.wasNull()) {
