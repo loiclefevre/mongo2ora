@@ -46,6 +46,9 @@ public class OracleCollectionInfo {
 	private final String user;
 	private final String collectionName;
 	private final boolean autonomousDatabase;
+
+	private final String tableName;
+	private boolean mixedCase;
 	public String isJsonConstraintName;
 	private boolean isJsonConstraintEnabled;
 	private String isJsonConstraintText;
@@ -59,14 +62,36 @@ public class OracleCollectionInfo {
 	public OracleCollectionInfo(String user, String collectionName, boolean autonomousDatabase) {
 		this.user = user;
 		this.collectionName = collectionName;
+		this.tableName = computeProperTableName(collectionName);
 		this.autonomousDatabase = autonomousDatabase;
 	}
 
+	private String computeProperTableName(String collectionName) {
+		boolean lowerCaseChar = false;
+		boolean upperCaseChar = false;
 
-	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection,
+		for (int i = 0; i < collectionName.length(); i++) {
+			final char c = collectionName.charAt(i);
+			if (Character.isLowerCase(c)) {
+				lowerCaseChar = true;
+			}
+			else if (Character.isUpperCase(c)) {
+				upperCaseChar = true;
+			}
+		}
+
+		if( (lowerCaseChar && !upperCaseChar) || (!lowerCaseChar && upperCaseChar)) {
+			return collectionName.toUpperCase();
+		} else {
+			mixedCase = true;
+			return collectionName;
+		}
+	}
+
+	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String _collectionName, boolean dropAlreadyExistingCollection,
 																	 boolean autonomousDatabase, boolean useMemoptimizeForWrite, boolean mongoDBAPICompatible, boolean forceOSON,
 																	 boolean buildSecondaryIndexes) throws SQLException, OracleException {
-		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName, autonomousDatabase);
+		final OracleCollectionInfo ret = new OracleCollectionInfo(user, _collectionName, autonomousDatabase);
 
 		try (Connection c = adminPDS.getConnection()) {
 			try (Statement s = c.createStatement()) {
@@ -82,24 +107,24 @@ public class OracleCollectionInfo {
 
 				final OracleRDBMSClient cl = new OracleRDBMSClient(props);
 				final OracleDatabase db = cl.getDatabase(userConnection);
-				OracleCollection sodaCollection = db.openCollection(collectionName);
+				OracleCollection sodaCollection = db.openCollection(ret.collectionName);
 
 
 				ret.emptyDestinationCollection = true;
 
 				if (sodaCollection == null) {
 					LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does not exist => creating it");
-					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : createClassicCollection(db, collectionName, forceOSON);
+					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName) : createClassicCollection(db, ret.collectionName, forceOSON);
 					if (sodaCollection == null) {
-						throw new IllegalStateException("Can't create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + collectionName);
+						throw new IllegalStateException("Can't create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
 					}
 					if (useMemoptimizeForWrite) {
-						configureSODACollectionForMemoptimizeForWrite(userConnection, collectionName, mongoDBAPICompatible);
+						configureSODACollectionForMemoptimizeForWrite(userConnection, ret.tableName, mongoDBAPICompatible);
 					}
 				}
 				else {
 					try (Statement s = userConnection.createStatement()) {
-						try (ResultSet r = s.executeQuery("select count(ID) from " + collectionName + " where rownum = 1")) {
+						try (ResultSet r = s.executeQuery("select count(ID) from \"" + ret.tableName + "\" where rownum = 1")) {
 							if (r.next() && r.getInt(1) == 1) {
 								// THERE IS AT LEAST ONE ROW!
 								if (dropAlreadyExistingCollection) {
@@ -110,12 +135,12 @@ public class OracleCollectionInfo {
 									// TODO 21c+ => JSON
 									// TODO 19c => BLOB if not autonomous database and not mongodb api compatible
 									// TODO 19c => BLOB OSON if autonomous database or not mongodb api compatible
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : createClassicCollection(db, collectionName, forceOSON);
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName) : createClassicCollection(db, ret.collectionName, forceOSON);
 									if (sodaCollection == null) {
-										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + collectionName);
+										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
 									}
 									if (useMemoptimizeForWrite) {
-										configureSODACollectionForMemoptimizeForWrite(userConnection, collectionName, mongoDBAPICompatible);
+										configureSODACollectionForMemoptimizeForWrite(userConnection, ret.tableName, mongoDBAPICompatible);
 									}
 								}
 								else {
@@ -129,12 +154,12 @@ public class OracleCollectionInfo {
 									LOGGER.warn((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
 									LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, collectionName) : createClassicCollection(db, collectionName, forceOSON);
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName) : createClassicCollection(db, ret.collectionName, forceOSON);
 									if (sodaCollection == null) {
-										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + collectionName);
+										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
 									}
 									if (useMemoptimizeForWrite) {
-										configureSODACollectionForMemoptimizeForWrite(userConnection, collectionName, mongoDBAPICompatible);
+										configureSODACollectionForMemoptimizeForWrite(userConnection, ret.tableName, mongoDBAPICompatible);
 									}
 								}
 							}
@@ -157,7 +182,7 @@ public class OracleCollectionInfo {
 
 			try (PreparedStatement p = c.prepareStatement("select constraint_name, search_condition, status from all_constraints where owner=? and table_name=? and constraint_type='C'")) {
 				p.setString(1, user);
-				p.setString(2, collectionName.toUpperCase());
+				p.setString(2, ret.tableName);
 
 				try (ResultSet r = p.executeQuery()) {
 					while (r.next()) {
@@ -168,7 +193,7 @@ public class OracleCollectionInfo {
 							ret.isJsonConstraintEnabled = r.getString(3).equalsIgnoreCase("ENABLED");
 							ret.isJsonConstraintText = constraintText;
 							ret.isJsonConstraintIsOSONFormat = condition.contains("format oson");
-							LOGGER.info("IS JSON constraint found: " + ret.isJsonConstraintName + " for collection " + collectionName);
+							LOGGER.info("IS JSON constraint found: " + ret.isJsonConstraintName + " for collection " + ret.collectionName);
 							break;
 						}
 					}
@@ -176,27 +201,27 @@ public class OracleCollectionInfo {
 
 				if (ret.isJsonConstraintName != null) {
 					LOGGER.info("Disabling Is JSON constraint: " + ret.isJsonConstraintName);
-					p.execute("alter table " + user + "." + collectionName + " disable constraint " + ret.isJsonConstraintName);
+					p.execute("alter table " + user + ".\"" + ret.tableName + "\" disable constraint " + ret.isJsonConstraintName);
 				}
 			}
 
 			try (PreparedStatement p = c.prepareStatement("select index_name, status from all_indexes where table_owner=? and table_name=? and uniqueness='UNIQUE' and constraint_index='YES'")) {
 				p.setString(1, user);
-				p.setString(2, collectionName.toUpperCase());
+				p.setString(2, ret.tableName);
 
 				try (ResultSet r = p.executeQuery()) {
 					if (r.next()) {
 						ret.primaryKeyIndexName = r.getString(1);
 						ret.primaryKeyIndexStatus = r.getString(2);
-						LOGGER.info("Primary key found: " + ret.primaryKeyIndexName + " for collection " + collectionName + " with status " + ret.primaryKeyIndexStatus);
+						LOGGER.info("Primary key found: " + ret.primaryKeyIndexName + " for collection " + ret.collectionName + " with status " + ret.primaryKeyIndexStatus);
 					}
 				}
 
 				if (ret.primaryKeyIndexName != null /*&& !autonomousDatabase*/) {
-					LOGGER.info("Dropping primary key and associated index: " + ret.primaryKeyIndexName + " for collection " + collectionName);
-					LOGGER.info("Running: " + "alter table " + user + "." + collectionName + " drop primary key drop index");
-					p.execute("alter table " + user + "." + collectionName + " drop primary key drop index");
-					LOGGER.info("Running: " + "alter table " + user + "." + collectionName + " drop primary key drop index DONE!");
+					LOGGER.info("Dropping primary key and associated index: " + ret.primaryKeyIndexName + " for collection " + ret.collectionName);
+					LOGGER.info("Running: " + "alter table " + user + ".\"" + ret.tableName + "\" drop primary key drop index");
+					p.execute("alter table " + user + ".\"" + ret.tableName + "\" drop primary key drop index");
+					LOGGER.info("Running: " + "alter table " + user + ".\"" + ret.tableName + "\" drop primary key drop index DONE!");
 				}
 			}
 		}
@@ -205,7 +230,7 @@ public class OracleCollectionInfo {
 	}
 
 	private static OracleCollection createClassicCollection(OracleDatabase db, String collectionName, boolean forceOSON) throws OracleException, SQLException {
-		if(forceOSON) {
+		if (forceOSON) {
 			final int version = db.admin().getConnection().getMetaData().getDatabaseMajorVersion();
 
 			try (CallableStatement cs = db.admin().getConnection().prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
@@ -232,26 +257,26 @@ public class OracleCollectionInfo {
 									}
 								}"""
 						: """
-					    				{
-					    "contentColumn" : {
-					       "name" : "JSON_DOCUMENT"
-					    },
-					    "keyColumn" : {
-					       "name" : "ID"
-					    },
-					    "versionColumn" : {
-					        "name" : "VERSION",
-					        "method" : "UUID"
-					    },
-					    "lastModifiedColumn" : {
-					        "name" : "LAST_MODIFIED"
-					    },
-					    "creationTimeColumn" : {
-					        "name" : "CREATED_ON"
-					    }
-					}""";
+						    				{
+						    "contentColumn" : {
+						       "name" : "JSON_DOCUMENT"
+						    },
+						    "keyColumn" : {
+						       "name" : "ID"
+						    },
+						    "versionColumn" : {
+						        "name" : "VERSION",
+						        "method" : "UUID"
+						    },
+						    "lastModifiedColumn" : {
+						        "name" : "LAST_MODIFIED"
+						    },
+						    "creationTimeColumn" : {
+						        "name" : "CREATED_ON"
+						    }
+						}""";
 
-				LOGGER.info("Using metadata: "+metadata);
+				LOGGER.info("Using metadata: " + metadata);
 
 				cs.registerOutParameter(3, Types.VARCHAR);
 				cs.setString(1, collectionName);
@@ -261,7 +286,8 @@ public class OracleCollectionInfo {
 			}
 
 			return db.openCollection(collectionName);
-		} else {
+		}
+		else {
 			LOGGER.info("Using default metadata");
 
 			return db.admin().createCollection(collectionName);
@@ -321,7 +347,7 @@ public class OracleCollectionInfo {
 					    }
 					}""";
 
-			LOGGER.info("Using metadata: "+metadata);
+			LOGGER.info("Using metadata: " + metadata);
 
 			cs.registerOutParameter(3, Types.VARCHAR);
 			cs.setString(1, collectionName);
@@ -333,8 +359,8 @@ public class OracleCollectionInfo {
 		return db.openCollection(collectionName);
 	}
 
-	private static void configureSODACollectionForMemoptimizeForWrite(Connection userConnection, String collectionName, boolean mongoDBAPICompatible) throws SQLException {
-		try (PreparedStatement p = userConnection.prepareStatement("insert into " + collectionName + "(ID,VERSION," + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") values (?,?,?)")) {
+	private static void configureSODACollectionForMemoptimizeForWrite(Connection userConnection, String tableName, boolean mongoDBAPICompatible) throws SQLException {
+		try (PreparedStatement p = userConnection.prepareStatement("insert into \"" + tableName + "\" (ID,VERSION," + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") values (?,?,?)")) {
 			p.setString(1, "dummy");
 			p.setString(2, "dummy");
 			p.setString(3, "{}");
@@ -342,14 +368,14 @@ public class OracleCollectionInfo {
 			userConnection.commit();
 		}
 
-		try (PreparedStatement p = userConnection.prepareStatement("delete from " + collectionName + " where id=?")) {
+		try (PreparedStatement p = userConnection.prepareStatement("delete from \"" + tableName + "\" where id=?")) {
 			p.setString(1, "dummy");
 			p.executeUpdate();
 			userConnection.commit();
 		}
 
 		try (Statement s = userConnection.createStatement()) {
-			s.execute("alter table " + collectionName + " memoptimize for write");
+			s.execute("alter table \"" + tableName + "\" memoptimize for write");
 		}
 	}
 
@@ -364,15 +390,15 @@ public class OracleCollectionInfo {
 	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, MongoDBMetadata collectionMetadataDump, int maxParallelDegree, ASCIIGUI gui, boolean mongoDBAPICompatible, boolean skipSecondaryIndexes, boolean buildSecondaryIndexes) throws SQLException, OracleException {
 		try (Connection c = mediumPDS.getConnection()) {
 			try (Statement s = c.createStatement()) {
-				if(!buildSecondaryIndexes) {
+				if (!buildSecondaryIndexes) {
 					LOGGER.info("Enabling JSON constraint...");
 					if (isJsonConstraintName != null) {
 						LOGGER.info("Re-Enabling Is JSON constraint NOVALIDATE");
-						s.execute("alter table " + collectionName + " modify constraint " + isJsonConstraintName + " enable novalidate");
+						s.execute("alter table \"" + tableName + "\" modify constraint " + isJsonConstraintName + " enable novalidate");
 					}
 					else {
 						LOGGER.info("Creating Is JSON constraint NOVALIDATE");
-						s.execute("alter table " + collectionName + " add constraint " + collectionName + "_jd_is_json check (" + (mongoDBAPICompatible ? "data" : "json_document") + " is json format oson (size limit 32m)) novalidate");
+						s.execute("alter table \"" + tableName + "\" add constraint " + collectionName + "_jd_is_json check (" + (mongoDBAPICompatible ? "data" : "json_document") + " is json format oson (size limit 32m)) novalidate");
 					}
 					LOGGER.info("OK");
 				}
@@ -380,7 +406,7 @@ public class OracleCollectionInfo {
 				// MOS 473656.1
 				s.execute("ALTER SESSION ENABLE PARALLEL DDL");
 
-				if(!buildSecondaryIndexes) {
+				if (!buildSecondaryIndexes) {
 					gui.startIndex("primary key");
 
 					LOGGER.info("Adding primary key constraint and index...");
@@ -389,7 +415,7 @@ public class OracleCollectionInfo {
 						String currentPKIndexStatus = "?";
 						try (PreparedStatement p = c.prepareStatement("select status from all_indexes where table_owner=? and table_name=? and index_name=? and uniqueness='UNIQUE' and constraint_index='YES'")) {
 							p.setString(1, user);
-							p.setString(2, collectionName.toUpperCase());
+							p.setString(2, tableName);
 							p.setString(3, primaryKeyIndexName);
 
 							try (ResultSet r = p.executeQuery()) {
@@ -409,20 +435,20 @@ public class OracleCollectionInfo {
 						else {
 							LOGGER.info("PK Index status is: " + currentPKIndexStatus);
 							if ("?".equals(currentPKIndexStatus)) {
-								LOGGER.info("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + "." + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-								s.execute("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + "." + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-								LOGGER.info("ALTER TABLE " + user + "." + collectionName + " ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
-								s.execute("ALTER TABLE " + user + "." + collectionName + " ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
+								LOGGER.info("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+								s.execute("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+								LOGGER.info("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
+								s.execute("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
 								LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 							}
 						}
 					}
 					else {
 						try {
-							LOGGER.info("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON " + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-							s.execute("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON " + collectionName + "(ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-							LOGGER.info("ALTER TABLE " + collectionName + " ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
-							s.execute("ALTER TABLE " + collectionName + " ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
+							LOGGER.info("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+							s.execute("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+							LOGGER.info("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
+							s.execute("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
 							LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 						}
 						catch (SQLException sqle) {
@@ -452,7 +478,7 @@ public class OracleCollectionInfo {
 
 						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
 
-						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + " where rownum <= 1000)\n" +
+						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from \"" + tableName + "\" where rownum <= 1000)\n" +
 								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
 							while (r.next()) {
 								String key = r.getString(1);
@@ -466,11 +492,10 @@ public class OracleCollectionInfo {
 
 						for (Document indexMetadata : mongoCollection.listIndexes()) {
 							LOGGER.info(indexMetadata.toString());
-							if(indexMetadata.getLong("expireAfterSeconds") != null) {
-								LOGGER.warn("TTL index "+indexMetadata.getString("name")+" with data expiration after " +indexMetadata.getLong("expireAfterSeconds")+" seconds not recreated!");
+							if (indexMetadata.getLong("expireAfterSeconds") != null) {
+								LOGGER.warn("TTL index " + indexMetadata.getString("name") + " with data expiration after " + indexMetadata.getLong("expireAfterSeconds") + " seconds not recreated!");
 							}
-							else
-							if (indexMetadata.getString("name").contains("$**") || "text".equals(indexMetadata.getEmbedded(Arrays.asList("key"), Document.class).getString("_fts"))) {
+							else if (indexMetadata.getString("name").contains("$**") || "text".equals(indexMetadata.getEmbedded(Arrays.asList("key"), Document.class).getString("_fts"))) {
 								needSearchIndex = true; //System.out.println("Need Search Index");
 							}
 							/*else if (indexMetadata.getString("name").equals("_id_")) {
@@ -508,9 +533,9 @@ public class OracleCollectionInfo {
 									allDocsHavePoints = numberOfDocsWithPoint == 100;
 
 									final String SQLStatement = String.format(
-											"create index %s on %s " +
+											"create index %s on \"%s\" " +
 													"(JSON_VALUE(" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", '$.%s' returning SDO_GEOMETRY ERROR ON ERROR NULL ON EMPTY)) " +
-													"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getString("name"), collectionName, spatialColumn);
+													"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getString("name"), tableName, spatialColumn);
 
 									LOGGER.info(SQLStatement);
 									long start = System.currentTimeMillis();
@@ -545,7 +570,7 @@ public class OracleCollectionInfo {
 
 							long start = System.currentTimeMillis();
 							gui.startIndex("search_index");
-							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
+							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON \"%s\" (" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, tableName, maxParallelDegree));
 							LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
 							gui.endIndex("search_index");
 						}
@@ -571,7 +596,7 @@ public class OracleCollectionInfo {
 
 						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
 
-						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from " + collectionName + " where rownum <= 1000)\n" +
+						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from \"" + tableName + "\" where rownum <= 1000)\n" +
 								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
 							while (r.next()) {
 								String key = r.getString(1);
@@ -585,11 +610,10 @@ public class OracleCollectionInfo {
 
 						for (MetadataIndex indexMetadata : collectionMetadataDump.getIndexes()) {
 							LOGGER.info(indexMetadata.toString());
-							if(indexMetadata.isTtl()) {
-								LOGGER.warn("TTL index "+indexMetadata.getName()+" with data expiration after " +indexMetadata.getExpireAfterSeconds().value+" seconds not recreated!");
+							if (indexMetadata.isTtl()) {
+								LOGGER.warn("TTL index " + indexMetadata.getName() + " with data expiration after " + indexMetadata.getExpireAfterSeconds().value + " seconds not recreated!");
 							}
-							else
-							if (indexMetadata.getName().contains("$**") || indexMetadata.getKey().text) {
+							else if (indexMetadata.getName().contains("$**") || indexMetadata.getKey().text) {
 								needSearchIndex = true; //System.out.println("Need Search Index");
 							}
 							/*else if (indexMetadata.getName().equals("_id_")) {
@@ -620,9 +644,9 @@ public class OracleCollectionInfo {
 									allDocsHavePoints = numberOfDocsWithPoint == 100;
 
 									final String SQLStatement = String.format(
-											"create index %s on %s " +
+											"create index %s on \"%s\" " +
 													"(JSON_VALUE(" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", '$.%s' returning SDO_GEOMETRY ERROR ON ERROR NULL ON EMPTY)) " +
-													"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getName(), collectionName, spatialColumn);
+													"indextype is MDSYS.SPATIAL_INDEX_V2" + (allDocsHavePoints ? " PARAMETERS ('layer_gtype=POINT cbtree_index=true')" : "") + (maxParallelDegree == -1 ? "" : " parallel " + maxParallelDegree), collectionName + "$" + indexMetadata.getName(), tableName, spatialColumn);
 
 									LOGGER.info(SQLStatement);
 									long start = System.currentTimeMillis();
@@ -656,7 +680,7 @@ public class OracleCollectionInfo {
 
 							long start = System.currentTimeMillis();
 							gui.startIndex("search_index");
-							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, collectionName, maxParallelDegree));
+							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON \"%s\" (" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, tableName, maxParallelDegree));
 							LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
 							gui.endIndex("search_index");
 						}
@@ -927,7 +951,7 @@ public class OracleCollectionInfo {
 
 	public static void main(String[] args) {
 		String fileName = args[0];
-		File collectionMetadata= new File(fileName);
+		File collectionMetadata = new File(fileName);
 
 		final ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 		final SimpleModule indexKeyModule = new SimpleModule();
@@ -943,27 +967,26 @@ public class OracleCollectionInfo {
 
 			System.out.println("ALTER SESSION ENABLE PARALLEL DDL");
 			int index = 0;
-			int ttlIndex=0;
-			int spatialIndex=0;
+			int ttlIndex = 0;
+			int spatialIndex = 0;
 			int mongoSearchIndex = 0;
 			int oracleSearchIndex = 0;
 
-			for(MongoDBMetadata m:metadata) {
+			for (MongoDBMetadata m : metadata) {
 				String collectionName = m.getCollectionName();
-				System.out.println("-- Collection: "+collectionName);
+				System.out.println("-- Collection: " + collectionName);
 
 				boolean needSearchIndex = false;
 
 
 				for (MetadataIndex indexMetadata : m.getIndexes()) {
 					LOGGER.info(indexMetadata.toString());
-					if(indexMetadata.isTtl()) {
-						System.out.println("-- TTL index "+indexMetadata.getName()+" with data expiration after " +indexMetadata.getExpireAfterSeconds().value+" seconds");
+					if (indexMetadata.isTtl()) {
+						System.out.println("-- TTL index " + indexMetadata.getName() + " with data expiration after " + indexMetadata.getExpireAfterSeconds().value + " seconds");
 						ttlIndex++;
 						index++;
 					}
-					else
-					if (indexMetadata.getName().contains("$**") || indexMetadata.getKey().text) {
+					else if (indexMetadata.getName().contains("$**") || indexMetadata.getKey().text) {
 						needSearchIndex = true; //System.out.println("Need Search Index");
 						mongoSearchIndex++;
 					}
@@ -1000,7 +1023,7 @@ public class OracleCollectionInfo {
 						}
 						else {
 							LOGGER.info("Normal index");
-							Map<String,FieldInfo> fieldsInfo = new HashMap<>();
+							Map<String, FieldInfo> fieldsInfo = new HashMap<>();
 							final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getName(),
 									getCreateIndexColumns(collectionName, indexMetadata.getKey(), fieldsInfo), indexMetadata.isUnique());
 
@@ -1033,13 +1056,14 @@ public class OracleCollectionInfo {
 			}
 
 			System.out.println("ALTER SESSION DISABLE PARALLEL DDL");
-			System.out.println("-- Total number of indexes: "+index);
-			System.out.println("-- . including spatial indexes: "+spatialIndex);
-			System.out.println("-- . including search indexes: "+oracleSearchIndex+(oracleSearchIndex < mongoSearchIndex ? " replacing "+mongoSearchIndex+" MongoDB search index(es)" : ""));
-			System.out.println("-- . including TTL indexes: "+ttlIndex);
+			System.out.println("-- Total number of indexes: " + index);
+			System.out.println("-- . including spatial indexes: " + spatialIndex);
+			System.out.println("-- . including search indexes: " + oracleSearchIndex + (oracleSearchIndex < mongoSearchIndex ? " replacing " + mongoSearchIndex + " MongoDB search index(es)" : ""));
+			System.out.println("-- . including TTL indexes: " + ttlIndex);
 
 
-		} catch (Exception e) {
+		}
+		catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
