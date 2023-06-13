@@ -5,8 +5,6 @@ import oracle.sql.json.OracleJsonGenerator;
 import org.bson.types.Decimal128;
 import org.bson.types.ObjectId;
 
-import java.io.ByteArrayOutputStream;
-import java.io.OutputStream;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -17,13 +15,13 @@ import java.util.UUID;
 public class MyBSON2OSONWriter implements BsonWriter {
 	private final OracleJsonFactory factory = getFactoryFromCache();
 
-	final static Map<Long,OracleJsonFactory> factoryCache = new HashMap<>();
+	final static Map<Long, OracleJsonFactory> factoryCache = new HashMap<>();
 
 	private static OracleJsonFactory getFactoryFromCache() {
 		OracleJsonFactory result;
-		if((result=factoryCache.get(Thread.currentThread().getId())) == null) {
+		if ((result = factoryCache.get(Thread.currentThread().getId())) == null) {
 			result = new OracleJsonFactory();
-			factoryCache.put(Thread.currentThread().getId(),result);
+			factoryCache.put(Thread.currentThread().getId(), result);
 		}
 
 		return result;
@@ -67,13 +65,16 @@ public class MyBSON2OSONWriter implements BsonWriter {
 			final UUID uuid = new UUID(Bits.readLong(binary.getData(), 0), Bits.readLong(binary.getData(), 8));
 			if (context.getContextType() == BsonContextType.ARRAY) {
 				gen.write(uuid.toString());
-			} else {
+			}
+			else {
 				gen.write(this.getName(), uuid.toString());
 			}
-		} else {
+		}
+		else {
 			if (context.getContextType() == BsonContextType.ARRAY) {
 				gen.write(hexa(binary.getData()));
-			} else {
+			}
+			else {
 				gen.write(this.getName(), hexa(binary.getData()));
 			}
 		}
@@ -90,7 +91,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	public void writeBoolean(boolean value) {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.write(value);
-		} else {
+		}
+		else {
 			gen.write(this.getName(), value);
 		}
 		state = getNextState();
@@ -106,7 +108,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	public void writeDateTime(long value) {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.write(Instant.ofEpochMilli(value).atOffset(ZoneOffset.UTC));
-		} else {
+		}
+		else {
 			gen.write(this.getName(), Instant.ofEpochMilli(value).atOffset(ZoneOffset.UTC));
 		}
 		state = getNextState();
@@ -132,7 +135,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	public void writeDouble(double value) {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.write(value);
-		} else {
+		}
+		else {
 			gen.write(this.getName(), value);
 		}
 		state = getNextState();
@@ -168,7 +172,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 
 		if (context != null && context.getContextType() != BsonContextType.TOP_LEVEL) {
 			state = getNextState();
-		} else {
+		}
+		else {
 			state = State.DONE;
 		}
 	}
@@ -183,7 +188,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	public void writeInt32(int value) {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.write(value);
-		} else {
+		}
+		else {
 			gen.write(this.getName(), value);
 		}
 		state = getNextState();
@@ -199,7 +205,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	public void writeInt64(long value) {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.write(value);
-		} else {
+		}
+		else {
 			gen.write(this.getName(), value);
 		}
 		state = getNextState();
@@ -215,7 +222,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	public void writeDecimal128(Decimal128 value) {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.write(value.bigDecimalValue());
-		} else {
+		}
+		else {
 			gen.write(this.getName(), value.bigDecimalValue());
 		}
 		state = getNextState();
@@ -271,7 +279,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	public void writeNull() {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.writeNull();
-		} else {
+		}
+		else {
 			gen.writeNull(this.getName());
 		}
 		state = getNextState();
@@ -287,13 +296,13 @@ public class MyBSON2OSONWriter implements BsonWriter {
 
 	public static String toHexString(final byte[] bytes) {
 		final char[] chars = new char[24];
-		for(int i=0,j = 0; j < 12; ++j) {
+		for (int i = 0, j = 0; j < 12; ++j) {
 			final byte b = bytes[j];
 			chars[i++] = HEX_CHARS[b >> 4 & 15];
 			chars[i++] = HEX_CHARS[b & 15];
 		}
 
-		return new String(chars,0,24);
+		return new String(chars, 0, 24);
 	}
 
 
@@ -306,7 +315,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			//gen.write(_id);
 			gen.writeId(objectId.toByteArray());
-		} else {
+		}
+		else {
 			//gen.write(this.getName(), _id);
 			//gen.writeKey(this.getName());
 			gen.writeId(objectId.toByteArray());
@@ -323,7 +333,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.writeId(objectId);
-		} else {
+		}
+		else {
 			gen.writeKey(this.getName());
 			gen.writeId(objectId);
 			//gen.write("test_buffer", "XDLKFQMLQKSDMFLKQSDMLFKQSMDLFKQSMDLFKMQSLDFKMLQSDFKMIPQOQSFKIDIPDIFDIFPFIDISFDSPQSDOFILQSDKFLQKSDFAA");
@@ -352,7 +363,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 		++this.serializationDepth;
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.writeStartArray();
-		} else {
+		}
+		else {
 			gen.writeStartArray(this.getName());
 		}
 		context = new Context(context, BsonContextType.ARRAY);
@@ -377,10 +389,12 @@ public class MyBSON2OSONWriter implements BsonWriter {
 		if (context != null && contextType != BsonContextType.SCOPE_DOCUMENT) {
 			if (context.getContextType() == BsonContextType.ARRAY) {
 				gen.writeStartObject();
-			} else {
+			}
+			else {
 				gen.writeStartObject(this.getName());
 			}
-		} else {
+		}
+		else {
 			gen.writeStartObject();
 		}
 
@@ -399,7 +413,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	public void writeString(String value) {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.write(value);
-		} else {
+		}
+		else {
 			gen.write(this.getName(), value);
 		}
 		state = getNextState();
@@ -415,7 +430,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	public void writeSymbol(String value) {
 		if (context.getContextType() == BsonContextType.ARRAY) {
 			gen.write(value);
-		} else {
+		}
+		else {
 			gen.write(this.getName(), value);
 		}
 		state = getNextState();
@@ -465,7 +481,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 			this.writeName(reader.readName());
 
 			this.pipeValue(reader);
-		} while (true);
+		}
+		while (true);
 	}
 
 	private void pipeDocument(BsonDocument value) {
@@ -493,7 +510,8 @@ public class MyBSON2OSONWriter implements BsonWriter {
 			}
 
 			this.pipeValue(reader);
-		} while (true);
+		}
+		while (true);
 
 	}
 
