@@ -536,14 +536,14 @@ public class OracleCollectionInfo {
 									gui.endIndex(indexMetadata.getString("name"));
 								}
 								else if (is_IdPK(keys)) {
-									LOGGER.info("_id field index");
+									/*LOGGER.info("_id field index");
 									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [{\"path\": \"_id\", \"order\": \"%s\"}], \"unique\": true}", collectionName + "$" + indexMetadata.getString("name"), keys.getInteger("_id") == 1 ? "asc" : "desc");
 
 									LOGGER.info(indexSpec);
-									long start = System.currentTimeMillis();
+									long start = System.currentTimeMillis();*/
 									gui.startIndex(indexMetadata.getString("name"));
-									sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
-									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+									/*sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
+									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));*/
 									gui.endIndex(indexMetadata.getString("name"));
 								}
 								else {
@@ -658,14 +658,14 @@ public class OracleCollectionInfo {
 									gui.endIndex(indexMetadata.getName());
 								}
 								else if (is_IdPK(indexMetadata.getKey())) {
-									LOGGER.info("_id field index");
+									/*LOGGER.info("_id field index");
 									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [{\"path\": \"_id\", \"order\": \"%s\"}], \"unique\": true}", collectionName + "$" + indexMetadata.getName(), getId_PKOrder( indexMetadata.getKey() ));
 
 									LOGGER.info(indexSpec);
-									long start = System.currentTimeMillis();
+									long start = System.currentTimeMillis();*/
 									gui.startIndex(indexMetadata.getName());
-									sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
-									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+									/*sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
+									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));*/
 									gui.endIndex(indexMetadata.getName());
 								}
 								else {
