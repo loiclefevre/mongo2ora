@@ -158,7 +158,7 @@ public class MongoDatabaseDump implements MongoDatabase {
 		final List<String> result = new ArrayList<>();
 
 		for(String f: Objects.requireNonNull(sourceDumpFolder.list())) {
-			if(f.toLowerCase().endsWith(".bson")) {
+			if(f.toLowerCase().endsWith(".bson") || f.toLowerCase().endsWith(".bson.gz")) {
 				result.add(f.substring(0,f.toLowerCase().lastIndexOf(".bson")));
 			}
 		}

@@ -5,6 +5,8 @@ import net.rubygrapefruit.platform.terminal.TerminalOutput;
 import oracle.ucp.jdbc.PoolDataSource;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -12,6 +14,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 
 public class Configuration {
 	public boolean useRSI;
@@ -54,13 +57,30 @@ public class Configuration {
 	public boolean skipSecondaryIndexes;
 	public boolean buildSecondaryIndexes;
 
+	public long samples = -1;
+
+	public final  Properties collectionsProperties = new Properties();
+
 	public static Configuration prepareConfiguration(String[] args) {
 		Configuration conf = new Configuration();
 
 		for (int i = 0; i < args.length; i++) {
 			final String arg = args[i];
 			switch (arg.toLowerCase()) {
+				case "--samples":
+					if (i + 1 < args.length) {
+						conf.samples = Integer.parseInt(args[++i]);
+						if(conf.samples <= 0) {
+							displayUsage("Expected valid samples parameter: --samples <strictly positive number of documents>");
+						}
+					}
+					else {
+						displayUsage("Expected valid samples parameter: --samples <strictly positive number of documents>");
+					}
+					break;
+
 				case "--mongodbapi":
+				case "--mongodb-api":
 					conf.mongodbAPICompatible = true;
 					break;
 
@@ -199,6 +219,14 @@ public class Configuration {
 		return conf;
 	}
 
+	public Configuration() {
+		try {
+			collectionsProperties.load(new FileInputStream("mongo2ora.properties"));
+		}
+		catch (IOException ignored) {
+		}
+	}
+
 	private void parseDestination() {
 		if (destination == null || destination.isEmpty()) {
 			displayUsage("missing destination");
@@ -283,14 +311,20 @@ public class Configuration {
 		}
 
 		Main.TERM.write("Usage: mongo2ora -s <source> -d <destination> -da <destination admin username> -dp <destination admin password> [options...]").newline().newline()
-				.write("where source can be a valid MongoDB connection string optionally enclosed between quotes or double quotes,").newline()
-				.write("and where destination can be a valid Oracle database connection string optionally enclosed between quotes or double quotes").newline()
+				.write("where source can be:").newline()
+				.write("- a valid MongoDB connection string optionally enclosed between quotes or double quotes,").newline()
+				.write("- a valid MongoDB Dump folder connection string (example: 'mongodump:///u01/data/dump' or \"mogodump://C:/temp folder/dump\") optionally enclosed between quotes or double quotes,").newline()
+				.write("and where destination can be a valid Oracle database connection string optionally enclosed between quotes or double quotes").newline().newline()
 				.write("Options:").newline()
 				.write("-p <number>: parallel threads to use (default number of vCPUs)").newline()
-				.write("-b <batch size>: size of batch (default: 4096)").newline()
+				.write("-b <batch size>: size of batch (default: 4096 JSON documents)").newline()
 				//.write("-a [description]: generate AWR report for Oracle database with optional description (requires Diagnostic Pack for on-premises)").newline()
 				.write("-c <comma-separated list of collection name(s)>: migrate only the selected collection(s)").newline()
 				.write("--drop: drop existing collection(s) from the destination database").newline()
+				.write("--skip-secondary-indexes: don't create secondary indexes (only for mongodumps)").newline()
+				.write("--build-secondary-indexes: don't load data, only create secondary indexes (only for mongodumps)").newline()
+				.write("--mongodb-api: makes collection(s) compatible to work with the Oracle Database API for MongoDB").newline()
+				.write("--samples <number>: loads only number of JSON documents into the collection(s) (only for mongodumps)").newline()
 		;
 
 		System.exit(1);

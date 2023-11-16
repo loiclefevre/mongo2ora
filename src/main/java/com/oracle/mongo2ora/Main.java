@@ -104,7 +104,7 @@ import static java.util.stream.Collectors.toList;
  * - help migration using properties file for per collection configuration (range partitioning, SODA collection columns, types etc..., filtering...)
  */
 public class Main {
-	public static final String VERSION = "1.2.2";
+	public static final String VERSION = "1.2.4";
 
 	private static final Logger LOGGER = Loggers.getLogger("main");
 
@@ -126,6 +126,7 @@ public class Main {
 	public static ASCIIGUI gui;
 
 	public static boolean AUTONOMOUS_DATABASE = false;
+	public static int ORACLE_MAJOR_VERSION = -1;
 	public static String AUTONOMOUS_DATABASE_TYPE = "";
 
 	private final static byte[] bsonDataSize = new byte[4];
@@ -157,6 +158,7 @@ public class Main {
 
 	static long position = 0;
 	static long previousPosition = 0;
+
 	private static void skipNextBSONRawData(InputStream input) throws IOException {
 		int readBytes = input.read(bsonDataSize, 0, 4);
 		if (readBytes != 4) throw new EOFException();
@@ -321,6 +323,7 @@ public class Main {
 
 				// Get destination database information
 				try (Connection c = adminPDS.getConnection()) {
+					ORACLE_MAJOR_VERSION = c.getMetaData().getDatabaseMajorVersion();
 
 /*					if(conf.forceOSON || conf.mongodbAPICompatible) {
 						final int version = c.getMetaData().getDatabaseMajorVersion();
@@ -365,7 +368,7 @@ public class Main {
 								//setBaseSize(r.getLong(3)/1024d/1024d/1024d);
 							}
 						}
-						catch(SQLException ignored) {
+						catch (SQLException ignored) {
 							AUTONOMOUS_DATABASE = false;
 						}
 					}
@@ -411,7 +414,7 @@ public class Main {
 					final long startTimeCollection = System.currentTimeMillis();
 
 					// disable is JSON constraint, remove indexes...
-					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes);
+					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes, conf.collectionsProperties);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
 						//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -420,39 +423,7 @@ public class Main {
 
 					gui.addNewDestinationDatabaseCollection(collectionName, null, mongoDatabase.getCollectionMetadata(collectionName));
 
-					if(!conf.buildSecondaryIndexes) {
-/*
-					// retrieve average document size
-					final Iterable<Document> statsIterator = mongoCollection.aggregate(Arrays.asList(
-							new BsonDocument("$collStats", new BsonDocument("storageStats", new BsonDocument("scale", new BsonInt32(1))))
-					));
-					final Document stats = (Document) statsIterator.iterator().next().get("storageStats");
-					final long averageDocumentSize = stats.getInteger("avgObjSize");
-
-					// Run clusterization on collection
-					Document min = mongoCollection.find().projection(include("_id")).sort(new Document("_id", 1)).hint(useIdIndexHint).first();
-					Document max = mongoCollection.find().projection(include("_id")).sort(new Document("_id", -1)).hint(useIdIndexHint).first();
-
-					//System.out.println("min _id: " + min.get("_id").toString());
-					//System.out.println("max _id: " + max.get("_id").toString());
-
-					final long minId = Long.parseLong(Objects.requireNonNull(min).get("_id").toString().substring(0, 8), 16);
-					final long maxId = Long.parseLong(Objects.requireNonNull(max).get("_id").toString().substring(0, 8), 16);
-
-					//System.out.println("min 8 first chars _id: " + minId);
-					//System.out.println("max 8 first chars _id: " + maxId);
-
-
-					long bucketSize = 8L;
-
-					long iterations = ((maxId - minId) / bucketSize) + 1;
-
-					// We don't want to start 100000+ threads!
-					while (iterations > 100000) {
-						bucketSize *= 2L;
-						iterations = ((maxId - minId) / bucketSize) + 1;
-					}
-*/
+					if (!conf.buildSecondaryIndexes) {
 						//System.out.println(collectionName + ": bucket size= " + bucketSize + ", iterations: " + iterations);
 
 						final List<CollectionCluster> publishingCfs = new LinkedList<>();
@@ -472,15 +443,17 @@ public class Main {
 						) {
 							long clusterStartPosition = 0;
 							long clusterCount = 0;
+							long totalCount = 0;
 							while (true) {
 								try {
 									//final byte[] data = readNextBSONRawData(inputStream);
 									skipNextBSONRawData(inputStream);
 									clusterCount++;
+									totalCount++;
 
-									// limit cluster size to 100,000 documents or 2 GB
+									// limit cluster size to 100,000 documents or 512 MB
 									boolean sizeOverFlow = false;
-									if ((sizeOverFlow = ((position - clusterStartPosition) > 2048L * 1024L * 1024L)) || clusterCount == 100000) {
+									if ((conf.samples != -1 && totalCount >= conf.samples) || (sizeOverFlow = ((position - clusterStartPosition) > 512L * 1024L * 1024L)) || clusterCount == 100000) {
 										if (sizeOverFlow) {
 											clusterCount--;
 											count += clusterCount;
@@ -497,9 +470,12 @@ public class Main {
 											gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long) ((double) (position - clusterStartPosition) / (double) clusterCount));
 											clusterCount = 0;
 											clusterStartPosition = position;
+
+											if(conf.samples != -1 && totalCount >= conf.samples) {
+												break;
+											}
 										}
 									}
-
 								}
 								catch (EOFException eof) {
 									break;
@@ -507,7 +483,7 @@ public class Main {
 							}
 
 							if (clusterCount > 0) {
-								final boolean sizeOverFlow = (position - clusterStartPosition) > 2048L * 1024L * 1024L;
+								final boolean sizeOverFlow = (position - clusterStartPosition) > 512L * 1024L * 1024L;
 								count += clusterCount;
 								publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (position - clusterStartPosition)));
 								//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
@@ -516,6 +492,8 @@ public class Main {
 						}
 
 						LOGGER.info("Collection " + collectionName + " has " + count + " JSON document(s).");
+
+						//System.exit(-1);
 
 						final List<CompletableFuture<ConversionInformation>> publishingCfsConvert = new LinkedList<>();
 						final List<CollectionCluster> mongoDBCollectionClusters = new ArrayList<>();
@@ -542,12 +520,27 @@ public class Main {
 									.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT"})
 									.useDirectPath()
 									.useDirectPathNoLog()
-									.useDirectPathParallel()
+									.useDirectPathParallel(true)
 									.useDirectPathSkipIndexMaintenance()
 									.useDirectPathSkipUnusableIndexes()
 									.useDirectPathStorageInit(String.valueOf(8 * 1024 * 1024))
 									.useDirectPathStorageNext(String.valueOf(8 * 1024 * 1024))
 									.build();
+						}
+
+						// source == mongodump
+						if (ORACLE_MAJOR_VERSION >= 23) {
+							String IDproperty = conf.collectionsProperties.getProperty(collectionName+".ID","EMBEDDED_OID");
+
+							if("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
+								try (Connection c = pds.getConnection()) {
+									try (Statement s = c.createStatement()) {
+										s.execute("alter table \""+oracleCollectionInfo.getTableName()+"\" drop column id");
+										//s.execute("alter table "+oracleCollectionInfo.getTableName()+" add id RAW(2000) GENERATED ALWAYS AS (JSON_VALUE(DATA FORMAT OSON , '$._id' RETURNING RAW(2000) ERROR ON ERROR)) not null");
+										//s.execute("alter table "+oracleCollectionInfo.getTableName()+" add id RAW(2000) null");
+									}
+								}
+							}
 						}
 
 						for (CollectionCluster cc : publishingCfs) {
@@ -568,7 +561,8 @@ public class Main {
 							}
 							else {
 */
-								workerThreadPool.execute(AUTONOMOUS_DATABASE || conf.mongodbAPICompatible || conf.forceOSON ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
+								workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
+										new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties) :
 										new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 								/*							}
 								 */
@@ -592,6 +586,19 @@ public class Main {
 						if (conf.useRSI) {
 							rsi.close();
 						}
+
+						// source == mongodump
+						if (ORACLE_MAJOR_VERSION >= 23) {
+							String IDproperty = conf.collectionsProperties.getProperty(collectionName+".ID","EMBEDDED_OID");
+
+							if("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
+								try (Connection c = pds.getConnection()) {
+									try (Statement s = c.createStatement()) {
+										s.execute("alter table \""+oracleCollectionInfo.getTableName()+"\" add id AS (JSON_VALUE(\"DATA\" FORMAT OSON , '$._id' RETURNING ANY ORA_RAWCOMPARE NO ARRAY ERROR ON ERROR)) MATERIALIZED  NOT NULL ENABLE");
+									}
+								}
+							}
+						}
 					}
 
 					// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
@@ -611,10 +618,10 @@ public class Main {
 
 				gui.flushTerminal();
 			}
-			catch(Throwable t){
+			catch (Throwable t) {
 				t.printStackTrace();
 			}
-			finally{
+			finally {
 				if (counterThreadPool != null) {
 					counterThreadPool.shutdown();
 				}
@@ -659,7 +666,7 @@ public class Main {
 								//setBaseSize(r.getLong(3)/1024d/1024d/1024d);
 							}
 						}
-						catch(SQLException ignored) {
+						catch (SQLException ignored) {
 							AUTONOMOUS_DATABASE = false;
 						}
 					}
@@ -714,7 +721,7 @@ public class Main {
 					final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collectionName);
 
 					// disable is JSON constraint, remove indexes...
-					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes);
+					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes, conf.collectionsProperties);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
 						//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -723,7 +730,7 @@ public class Main {
 
 					gui.addNewDestinationDatabaseCollection(collectionName, mongoCollection, null);
 
-					if(!conf.buildSecondaryIndexes) {
+					if (!conf.buildSecondaryIndexes) {
 						// retrieve average document size
 						final Iterable<Document> statsIterator = mongoCollection.aggregate(Arrays.asList(
 								new BsonDocument("$collStats", new BsonDocument("storageStats", new BsonDocument("scale", new BsonInt32(1))))
@@ -799,12 +806,27 @@ public class Main {
 									.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT"})
 									.useDirectPath()
 									.useDirectPathNoLog()
-									.useDirectPathParallel()
+									.useDirectPathParallel(true)
 									.useDirectPathSkipIndexMaintenance()
 									.useDirectPathSkipUnusableIndexes()
 									.useDirectPathStorageInit(String.valueOf(8 * 1024 * 1024))
 									.useDirectPathStorageNext(String.valueOf(8 * 1024 * 1024))
 									.build();
+						}
+
+						// source == MongoDB database
+						if (ORACLE_MAJOR_VERSION >= 23) {
+							String IDproperty = conf.collectionsProperties.getProperty(collectionName+".ID","EMBEDDED_OID");
+
+							if("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
+								try (Connection c = pds.getConnection()) {
+									try (Statement s = c.createStatement()) {
+										s.execute("alter table \""+oracleCollectionInfo.getTableName()+"\" drop column id");
+										//s.execute("alter table "+oracleCollectionInfo.getTableName()+" add id RAW(2000) GENERATED ALWAYS AS (JSON_VALUE(DATA FORMAT OSON , '$._id' RETURNING RAW(2000) ERROR ON ERROR)) not null");
+										//s.execute("alter table "+oracleCollectionInfo.getTableName()+" add id RAW(2000) null");
+									}
+								}
+							}
 						}
 
 						for (CompletableFuture<CollectionCluster> publishingCf : publishingCfs) {
@@ -825,7 +847,8 @@ public class Main {
 									workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 								}
 								else {
-									workerThreadPool.execute(AUTONOMOUS_DATABASE || conf.mongodbAPICompatible || conf.forceOSON ? new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible) :
+									workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
+											new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties) :
 											new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 								}
 
@@ -849,6 +872,19 @@ public class Main {
 						if (conf.useRSI) {
 							rsi.close();
 						}
+
+						// source == mongodump
+						if (ORACLE_MAJOR_VERSION >= 23) {
+							String IDproperty = conf.collectionsProperties.getProperty(collectionName+".ID","EMBEDDED_OID");
+
+							if("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
+								try (Connection c = pds.getConnection()) {
+									try (Statement s = c.createStatement()) {
+										s.execute("alter table \""+oracleCollectionInfo.getTableName()+"\" add id AS (JSON_VALUE(\"DATA\" FORMAT OSON , '$._id' RETURNING ANY ORA_RAWCOMPARE NO ARRAY ERROR ON ERROR)) MATERIALIZED  NOT NULL ENABLE");
+									}
+								}
+							}
+						}
 					}
 
 					// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
@@ -868,10 +904,10 @@ public class Main {
 
 				gui.flushTerminal();
 			}
-			catch(Throwable t){
+			catch (Throwable t) {
 				t.printStackTrace();
 			}
-			finally{
+			finally {
 				if (counterThreadPool != null) {
 					counterThreadPool.shutdown();
 				}

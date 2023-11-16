@@ -7,6 +7,7 @@ public class MetadataKey {
 	public boolean text;
 	public final List<IndexColumn> columns = new ArrayList<>();
 	public boolean spatial;
+	public boolean hashed;
 
 	public void addIndexColumn(String indexColumn, boolean asc) {
 		columns.add(new IndexColumn(indexColumn, asc) );
@@ -18,6 +19,11 @@ public class MetadataKey {
 				"text=" + text +
 				", columns=" + columns +
 				", spatial=" + spatial +
+				", hashed=" + hashed +
 				'}';
+	}
+
+	public boolean hasColumns() {
+		return !columns.isEmpty();
 	}
 }

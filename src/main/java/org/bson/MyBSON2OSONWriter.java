@@ -319,6 +319,7 @@ public class MyBSON2OSONWriter implements BsonWriter {
 		else {
 			//gen.write(this.getName(), _id);
 			//gen.writeKey(this.getName());
+			gen.writeKey(this.getName());
 			gen.writeId(objectId.toByteArray());
 			//gen.write("test_buffer", "XDLKFQMLQKSDMFLKQSDMLFKQSMDLFKQSMDLFKMQSLDFKMLQSDFKMIPQOQSFKIDIPDIFDIFPFIDISFDSPQSDOFILQSDKFLQKSDFAA");
 		}
@@ -327,7 +328,7 @@ public class MyBSON2OSONWriter implements BsonWriter {
 
 
 	public void writeObjectId2(final byte[] objectId) {
-		if (oid == null && "_id".equals(this.getName())) {
+		if (oid == null && "".equals(this.getName())) {
 			oid = toHexString(objectId);
 		}
 
@@ -713,6 +714,10 @@ public class MyBSON2OSONWriter implements BsonWriter {
 		return oid;
 	}
 
+	public final boolean hasOid() {
+		return oid != null;
+	}
+
 	public final byte[] getOSONBytes() {
 		return out.toByteArray();
 	}
@@ -748,7 +753,7 @@ public class MyBSON2OSONWriter implements BsonWriter {
 		}
 	}
 
-	private static String hexa(final byte[] data) {
+	public static String hexa(final byte[] data) {
 		final char[] result = new char[data.length * 2];
 
 		int j = 0;

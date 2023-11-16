@@ -9,22 +9,26 @@ import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.ConversionInformation;
 import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
+import com.oracle.mongo2ora.migration.mongodb.MongoCollectionDump;
 import oracle.jdbc.internal.OracleConnection;
 import oracle.ucp.jdbc.PoolDataSource;
 import org.bson.MyBSONDecoder;
 import org.bson.RawBsonDocument;
 
+import java.io.ByteArrayInputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.EnumSet;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Semaphore;
 
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
 
 public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 	private static final Logger LOGGER = Loggers.getLogger("converter");
+	private final Semaphore DB_SEMAPHORE;
 
 	private final CollectionCluster work;
 	private final CompletableFuture<ConversionInformation> publishingCf;
@@ -34,18 +38,24 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 	private final ASCIIGUI gui;
 	private final int batchSize;
 	private final String collectionName;
-	private final String tableName;
 
-	public DirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize) {
+	private final boolean mongoDBAPICompatible;
+	private final String tableName;
+	private final int oracleDBVersion;
+
+	public DirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible, int oracleDBVersion) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
-		this.tableName=tableName;
+		this.tableName = tableName;
 		this.work = work;
 		this.publishingCf = publishingCf;
 		this.database = database;
 		this.pds = pds;
 		this.gui = gui;
 		this.batchSize = batchSize;
+		this.DB_SEMAPHORE = DB_SEMAPHORE;
+		this.mongoDBAPICompatible = mongoDBAPICompatible;
+		this.oracleDBVersion = oracleDBVersion;
 	}
 
 	@Override
@@ -57,7 +67,10 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 
 		//System.out.println("Thread " + threadId + " working on " + work.count + " docs");
 
+
 		try {
+			DB_SEMAPHORE.acquire();
+
 			MongoCollection<RawBsonDocument> collection = database.getCollection(collectionName, RawBsonDocument.class);
 			try (Connection c = pds.getConnection()) {
 				c.setAutoCommit(false);
@@ -71,6 +84,10 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
                         }
                     }
                     */
+
+				if (work.sourceDump) {
+					((MongoCollectionDump<RawBsonDocument>) collection).setWork(work);
+				}
 
 				final OracleConnection realConnection = (OracleConnection) c;
 
@@ -95,22 +112,21 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 					directPathLoadProperties.put("DPPDEF_IN_STORAGE_INIT", String.valueOf(8 * 1024 * 1024));
 					directPathLoadProperties.put("DPPDEF_IN_STORAGE_NEXT", String.valueOf(8 * 1024 * 1024));
 
-					// Reactive Streaming Ingestion
-
-					try (PreparedStatement p = ((OracleConnection) c).prepareDirectPath(pds.getUser().toUpperCase(), "\""+tableName+"\"", new String[]{"ID", "VERSION", "JSON_DOCUMENT"},/* String.format("p%d", partitionId),*/ directPathLoadProperties)) {
-						//try (PreparedStatement p = c.prepareStatement("insert /*+ append */ into " + collectionName + " (ID, VERSION, JSON_DOCUMENT) values (?,?,?)")) {
+					if (this.mongoDBAPICompatible || oracleDBVersion >= 23) {
+						try (PreparedStatement p = ((OracleConnection) c).prepareDirectPath(pds.getUser().toUpperCase(), "\"" + tableName + "\"", new String[]{ "VERSION", "DATA"},/* String.format("p%d", partitionId),*/ directPathLoadProperties)) {
+							//try (PreparedStatement p = c.prepareStatement("insert /*+ append */ into \"" + tableName + "\" (VERSION, DATA) values (?,?)")) {
                             /*final CharacterSet cs = CharacterSet.make(CharacterSet.AL32UTF8_CHARSET);
                             final CHAR version = new CHAR("1", cs);
 
                             p.setObject(3, version, oracle.jdbc.OracleTypes.CHAR); */
-						p.setString(2, "1");
+							p.setString(1, "1");
 
-						int batchSizeCounter = 0;
+							int batchSizeCounter = 0;
 
-						//final JsonWriterSettings jsonWriterSettings = JsonWriterSettings.builder().outputMode(JsonMode.RELAXED).build();
-						//final MyStringReader msr = new MyStringReader("");
+							//final JsonWriterSettings jsonWriterSettings = JsonWriterSettings.builder().outputMode(JsonMode.RELAXED).build();
+							//final MyStringReader msr = new MyStringReader("");
 
-						final MyBSONDecoder decoder = new MyBSONDecoder(true);
+							final MyBSONDecoder decoder = new MyBSONDecoder(true);
 
 //						long mongoDBFetchStart;
 //						long mongoDBFetch = 0;
@@ -123,83 +139,177 @@ public class DirectPathBSON2OSONCollectionConverter implements Runnable {
 //						long addBatchStart;
 //						long addBatch = 0;
 
-						while (cursor.hasNext()) {
-							//out.reset();
+							while (cursor.hasNext()) {
+								//out.reset();
 //							mongoDBFetchStart = System.nanoTime();
-							final RawBsonDocument doc = cursor.next();
+								final RawBsonDocument doc = cursor.next();
 //							mongoDBFetch += (System.nanoTime() - mongoDBFetchStart);
 
-							// -500 MB/sec
+								// -500 MB/sec
 //							bsonConvertStart = System.nanoTime();
-							decoder.convertBSONToOSON(doc);
+								decoder.convertBSONToOSON(doc);
 //							bsonConvert += (System.nanoTime() - bsonConvertStart);
-							bsonLength += decoder.getBsonLength();
+								bsonLength += decoder.getBsonLength();
 
 //                                OracleJsonGenerator ogen = factory.createJsonBinaryGenerator(out);
-							//JsonGenerator gen = ogen.wrap(JsonGenerator.class);
+								//JsonGenerator gen = ogen.wrap(JsonGenerator.class);
 //                                msr.reset("{\"test\":1}");
-							//msr.reset(doc.toJson(jsonWriterSettings));
+								//msr.reset(doc.toJson(jsonWriterSettings));
 //                                ogen.writeParser(factory.createJsonTextParser(msr));
 //                                ogen.close();
 
 //                                p.setString(1, doc.get("_id").toString());
 //                                p.setBytes(2, out.toByteArray());
-							byte[] osonData;
+								byte[] osonData;
 //							serializeOSONStart = System.nanoTime();
-							p.setBytes(3, osonData = decoder.getOSONData());
+								//p.setBytes(2, osonData = decoder.getOSONData());
+								p.setBlob(2, new ByteArrayInputStream(osonData = decoder.getOSONData()));
 //							serializeOSON += (System.nanoTime() - serializeOSONStart);
 //								p.setObject(3,osonData = decoder.getOSONData(), OracleTypes.JSON);
 //								p.setString(3, doc.toJson());
 //								osonData = doc.toJson().getBytes(StandardCharsets.UTF_8);
 
 
-							p.setString(1, decoder.getOid());
-							//final CHAR oid = new CHAR(decoder.getOid(), cs);
 
-							//p.setObject(1, oid, oracle.jdbc.OracleTypes.CHAR);
+								//final CHAR oid = new CHAR(decoder.getOid(), cs);
+
+								//p.setObject(1, oid, oracle.jdbc.OracleTypes.CHAR);
 
 
-							osonLength += osonData.length;
+								osonLength += osonData.length;
 
 //							addBatchStart = System.nanoTime();
-							p.addBatch();
+								p.addBatch();
 //							addBatch += (System.nanoTime() - addBatchStart);
 
-							batchSizeCounter++;
+								batchSizeCounter++;
 
-							if (batchSizeCounter >= batchSize) {
-								count += batchSizeCounter;
+								if (batchSizeCounter >= batchSize) {
+									count += batchSizeCounter;
 //								jdbcBatchExecuteStart = System.nanoTime();
-								p.executeLargeBatch();
+									p.executeLargeBatch();
 //								jdbcBatchExecute += (System.nanoTime() - jdbcBatchExecuteStart);
-								batchSizeCounter = 0;
+									batchSizeCounter = 0;
+								}
 							}
+
+							if (batchSizeCounter > 0) {
+								count += batchSizeCounter;
+								//jdbcBatchExecuteStart = System.nanoTime();
+								p.executeLargeBatch();
+								//jdbcBatchExecute += (System.nanoTime() - jdbcBatchExecuteStart);
+							}
+
+							realConnection.commit(commitOptions);
 						}
-
-						if (batchSizeCounter > 0) {
-							count += batchSizeCounter;
-							//jdbcBatchExecuteStart = System.nanoTime();
-							p.executeLargeBatch();
-							//jdbcBatchExecute += (System.nanoTime() - jdbcBatchExecuteStart);
-						}
-
-						realConnection.commit(commitOptions);
-
-						//LOGGER.info("count=" + count + ", mongoDBFetch=" + mongoDBFetch + ", bsonConvert=" + bsonConvert + ", serializeOSON=" + serializeOSON + ", addBatch=" + addBatch + ", jdbcBatchExecute=" + jdbcBatchExecute);
-
-						//final long duration = System.currentTimeMillis() - start;
-						gui.updateDestinationDatabaseDocuments(count, osonLength);
-						//System.out.println("Thread " + threadId + " got " + count + " docs in " + duration + "ms => " + ((double) count / (double) duration * 1000.0d) + " Docs/s (BSON: " + bsonLength + ", OSON: " + osonLength + ")");
 					}
+					else {
+						try (PreparedStatement p = ((OracleConnection) c).prepareDirectPath(pds.getUser().toUpperCase(), "\"" + tableName + "\"", new String[]{"ID", "VERSION", "JSON_DOCUMENT"},/* String.format("p%d", partitionId),*/ directPathLoadProperties)) {
+							//try (PreparedStatement p = c.prepareStatement("insert /*+ append */ into " + collectionName + " (ID, VERSION, JSON_DOCUMENT) values (?,?,?)")) {
+                            /*final CharacterSet cs = CharacterSet.make(CharacterSet.AL32UTF8_CHARSET);
+                            final CHAR version = new CHAR("1", cs);
+
+                            p.setObject(3, version, oracle.jdbc.OracleTypes.CHAR); */
+							p.setString(2, "1");
+
+							int batchSizeCounter = 0;
+
+							//final JsonWriterSettings jsonWriterSettings = JsonWriterSettings.builder().outputMode(JsonMode.RELAXED).build();
+							//final MyStringReader msr = new MyStringReader("");
+
+							final MyBSONDecoder decoder = new MyBSONDecoder(true);
+
+//						long mongoDBFetchStart;
+//						long mongoDBFetch = 0;
+//						long bsonConvertStart;
+//						long bsonConvert = 0;
+//						long serializeOSONStart;
+//						long serializeOSON = 0;
+//						long jdbcBatchExecuteStart;
+//						long jdbcBatchExecute = 0;
+//						long addBatchStart;
+//						long addBatch = 0;
+
+							while (cursor.hasNext()) {
+								//out.reset();
+//							mongoDBFetchStart = System.nanoTime();
+								final RawBsonDocument doc = cursor.next();
+//							mongoDBFetch += (System.nanoTime() - mongoDBFetchStart);
+
+								// -500 MB/sec
+//							bsonConvertStart = System.nanoTime();
+								decoder.convertBSONToOSON(doc);
+//							bsonConvert += (System.nanoTime() - bsonConvertStart);
+								bsonLength += decoder.getBsonLength();
+
+//                                OracleJsonGenerator ogen = factory.createJsonBinaryGenerator(out);
+								//JsonGenerator gen = ogen.wrap(JsonGenerator.class);
+//                                msr.reset("{\"test\":1}");
+								//msr.reset(doc.toJson(jsonWriterSettings));
+//                                ogen.writeParser(factory.createJsonTextParser(msr));
+//                                ogen.close();
+
+//                                p.setString(1, doc.get("_id").toString());
+//                                p.setBytes(2, out.toByteArray());
+								byte[] osonData;
+//							serializeOSONStart = System.nanoTime();
+								p.setBytes(3, osonData = decoder.getOSONData());
+//							serializeOSON += (System.nanoTime() - serializeOSONStart);
+//								p.setObject(3,osonData = decoder.getOSONData(), OracleTypes.JSON);
+//								p.setString(3, doc.toJson());
+//								osonData = doc.toJson().getBytes(StandardCharsets.UTF_8);
+
+
+								p.setString(1, decoder.getOid());
+								//final CHAR oid = new CHAR(decoder.getOid(), cs);
+
+								//p.setObject(1, oid, oracle.jdbc.OracleTypes.CHAR);
+
+
+								osonLength += osonData.length;
+
+//							addBatchStart = System.nanoTime();
+								p.addBatch();
+//							addBatch += (System.nanoTime() - addBatchStart);
+
+								batchSizeCounter++;
+
+								if (batchSizeCounter >= batchSize) {
+									count += batchSizeCounter;
+//								jdbcBatchExecuteStart = System.nanoTime();
+									p.executeLargeBatch();
+//								jdbcBatchExecute += (System.nanoTime() - jdbcBatchExecuteStart);
+									batchSizeCounter = 0;
+								}
+							}
+
+							if (batchSizeCounter > 0) {
+								count += batchSizeCounter;
+								//jdbcBatchExecuteStart = System.nanoTime();
+								p.executeLargeBatch();
+								//jdbcBatchExecute += (System.nanoTime() - jdbcBatchExecuteStart);
+							}
+
+							realConnection.commit(commitOptions);
+						}
+					}
+
+					//LOGGER.info("count=" + count + ", mongoDBFetch=" + mongoDBFetch + ", bsonConvert=" + bsonConvert + ", serializeOSON=" + serializeOSON + ", addBatch=" + addBatch + ", jdbcBatchExecute=" + jdbcBatchExecute);
+
+					//final long duration = System.currentTimeMillis() - start;
+					gui.updateDestinationDatabaseDocuments(count, osonLength);
+					//System.out.println("Thread " + threadId + " got " + count + " docs in " + duration + "ms => " + ((double) count / (double) duration * 1000.0d) + " Docs/s (BSON: " + bsonLength + ", OSON: " + osonLength + ")");
 				}
 			}
 		}
-		catch (SQLException sqle) {
-			//sqle.printStackTrace();
-			publishingCf.complete(new ConversionInformation(sqle));
+		catch (
+				Exception e) {
+			//e.printStackTrace();
+			publishingCf.complete(new ConversionInformation(e));
 		}
 		finally {
 			//System.out.println("Completed conversion task with: " + bsonLength + ", " + osonLength + "," + count);
+			DB_SEMAPHORE.release();
 			publishingCf.complete(new ConversionInformation(bsonLength, osonLength, count));
 		}
 	}

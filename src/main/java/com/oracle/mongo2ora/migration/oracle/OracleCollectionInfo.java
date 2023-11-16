@@ -9,6 +9,7 @@ import com.oracle.mongo2ora.migration.mongodb.IndexColumn;
 import com.oracle.mongo2ora.migration.mongodb.MetadataIndex;
 import com.oracle.mongo2ora.migration.mongodb.MetadataKey;
 import com.oracle.mongo2ora.migration.mongodb.MongoDBMetadata;
+import oracle.security.crypto.core.Padding;
 import oracle.soda.OracleCollection;
 import oracle.soda.OracleDatabase;
 import oracle.soda.OracleException;
@@ -37,7 +38,7 @@ public class OracleCollectionInfo {
 	private final String collectionName;
 	private final boolean autonomousDatabase;
 
-	private final String tableName;
+	private String tableName;
 	private boolean mixedCase;
 	public String isJsonConstraintName;
 	private boolean isJsonConstraintEnabled;
@@ -52,8 +53,19 @@ public class OracleCollectionInfo {
 	public OracleCollectionInfo(String user, String collectionName, boolean autonomousDatabase) {
 		this.user = user;
 		this.collectionName = collectionName;
-		this.tableName = computeProperTableName(collectionName);
+		//this.tableName = computeProperTableName(collectionName);
 		this.autonomousDatabase = autonomousDatabase;
+	}
+
+	public void retrieveTableName(Connection c) throws SQLException {
+		try(PreparedStatement p = c.prepareStatement("select u.json_descriptor.tableName.string() from user_soda_collections u where uri_name=?")) {
+			p.setString(1,collectionName);
+			try(ResultSet r = p.executeQuery()) {
+				if(r.next()) {
+					this.tableName = r.getString(1);
+				}
+			}
+		}
 	}
 
 	private static String computeProperTableName(String collectionName) {
@@ -81,13 +93,20 @@ public class OracleCollectionInfo {
 
 	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection,
 																	 boolean autonomousDatabase, boolean useMemoptimizeForWrite, boolean mongoDBAPICompatible, boolean forceOSON,
-																	 boolean buildSecondaryIndexes) throws SQLException, OracleException {
+																	 boolean buildSecondaryIndexes, Properties collectionsProperties) throws SQLException, OracleException {
 		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName, autonomousDatabase);
 
 		try (Connection c = adminPDS.getConnection()) {
 			try (Statement s = c.createStatement()) {
 				s.execute("grant execute on CTX_DDL to " + user);
+			} catch(SQLException ignored) {
+				LOGGER.warn("Unable to grant execute on CTX_DDL!");
+			}
+
+			try (Statement s = c.createStatement()) {
 				s.execute("grant create job to " + user);
+			} catch(SQLException ignored) {
+				LOGGER.warn("Unable to grant create job!");
 			}
 
 			try (Connection userConnection = pds.getConnection()) {
@@ -105,17 +124,21 @@ public class OracleCollectionInfo {
 
 				if (sodaCollection == null) {
 					LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does not exist => creating it");
-					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON) : createClassicCollection(db, ret.collectionName, forceOSON);
+					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON, collectionsProperties) : createClassicCollection(db, ret.collectionName, forceOSON);
 					if (sodaCollection == null) {
 						throw new IllegalStateException("Can't create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
+					} else {
+						ret.retrieveTableName(userConnection);
 					}
 					if (useMemoptimizeForWrite) {
 						configureSODACollectionForMemoptimizeForWrite(userConnection, ret.tableName, mongoDBAPICompatible);
 					}
 				}
 				else {
+					ret.retrieveTableName(userConnection);
+
 					try (Statement s = userConnection.createStatement()) {
-						try (ResultSet r = s.executeQuery("select count(ID) from \"" + ret.tableName + "\" where rownum = 1")) {
+						try (ResultSet r = s.executeQuery("select count(1) from \"" + ret.tableName + "\" where rownum = 1")) {
 							if (r.next() && r.getInt(1) == 1) {
 								// THERE IS AT LEAST ONE ROW!
 								if (dropAlreadyExistingCollection) {
@@ -126,7 +149,7 @@ public class OracleCollectionInfo {
 									// TODO 21c+ => JSON
 									// TODO 19c => BLOB if not autonomous database and not mongodb api compatible
 									// TODO 19c => BLOB OSON if autonomous database or not mongodb api compatible
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON) : createClassicCollection(db, ret.collectionName, forceOSON);
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON, collectionsProperties) : createClassicCollection(db, ret.collectionName, forceOSON);
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
 									}
@@ -145,7 +168,7 @@ public class OracleCollectionInfo {
 									LOGGER.warn((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
 									LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON) : createClassicCollection(db, ret.collectionName, forceOSON);
+									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON, collectionsProperties) : createClassicCollection(db, ret.collectionName, forceOSON);
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
 									}
@@ -221,9 +244,11 @@ public class OracleCollectionInfo {
 	}
 
 	private static OracleCollection createClassicCollection(OracleDatabase db, String collectionName, boolean forceOSON) throws OracleException, SQLException {
-		if (forceOSON) {
-			final int version = db.admin().getConnection().getMetaData().getDatabaseMajorVersion();
+		final int version = db.admin().getConnection().getMetaData().getDatabaseMajorVersion();
 
+		LOGGER.info("Connected to database v"+version);
+
+		if (forceOSON) {
 			try (CallableStatement cs = db.admin().getConnection().prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
 				final String metadata = version == 19 ?
 						"""
@@ -234,7 +259,8 @@ public class OracleCollectionInfo {
 									   "jsonFormat" : "OSON"
 									},
 									"keyColumn" : {
-									   "name" : "ID"
+									   "name" : "ID",
+										"method" : "UUID"
 									},
 									"versionColumn" : {
 										"name" : "VERSION",
@@ -253,7 +279,8 @@ public class OracleCollectionInfo {
 						       "name" : "JSON_DOCUMENT"
 						    },
 						    "keyColumn" : {
-						       "name" : "ID"
+						       "name" : "ID",
+						       "method" : "UUID"
 						    },
 						    "versionColumn" : {
 						        "name" : "VERSION",
@@ -288,66 +315,110 @@ public class OracleCollectionInfo {
 	/**
 	 *
 	 */
-	private static OracleCollection createMongoDBAPICompatibleCollection(OracleDatabase db, String collectionName, boolean forceOSON) throws SQLException, OracleException {
+	private static OracleCollection createMongoDBAPICompatibleCollection(OracleDatabase db, String collectionName, boolean forceOSON, Properties collectionsProperties) throws SQLException, OracleException {
 		final int version = db.admin().getConnection().getMetaData().getDatabaseMajorVersion();
 
-		try (CallableStatement cs = db.admin().getConnection().prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
-			final String metadata = version == 19 || forceOSON ?
-					"""
-							{
-								"contentColumn" : {
-								   "name" : "DATA",
-								   "sqlType" : "BLOB",
-								   "jsonFormat" : "OSON"
-								},
-								"keyColumn" : {
-								   "name" : "ID",
-								   "assignmentMethod" : "EMBEDDED_OID",
-								   "path" : "_id"
-								},
-								"versionColumn" : {
-									"name" : "VERSION",
-									"method" : "UUID"
-								},
-								"lastModifiedColumn" : {
-									"name" : "LAST_MODIFIED"
-								},
-								"creationTimeColumn" : {
-									"name" : "CREATED_ON"
-								}
-							}"""
-					: """
-					    				{
-					    "contentColumn" : {
-					       "name" : "DATA"
-					    },
-					    "keyColumn" : {
-					       "name" : "ID",
-					       "assignmentMethod" : "EMBEDDED_OID",
-					       "path" : "_id"
-					    },
-					    "versionColumn" : {
-					        "name" : "VERSION",
-					        "method" : "UUID"
-					    },
-					    "lastModifiedColumn" : {
-					        "name" : "LAST_MODIFIED"
-					    },
-					    "creationTimeColumn" : {
-					        "name" : "CREATED_ON"
-					    }
-					}""";
+		String IDproperty = collectionsProperties.getProperty(collectionName+".ID","EMBEDDED_OID");
 
-			LOGGER.info("Using metadata: " + metadata);
+		LOGGER.info("Found overriding property for ID column: "+ IDproperty);
 
-			cs.registerOutParameter(3, Types.VARCHAR);
-			cs.setString(1, collectionName);
-			cs.setString(2, metadata);
+		if(version == 19 || version == 21 || (forceOSON && version < 23)) {
+			try (CallableStatement cs = db.admin().getConnection().prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?) }")) {
+				final String metadata = version == 19 || forceOSON ?
+				"""
+						{
+							"contentColumn" : {
+							   "name" : "DATA",
+							   "sqlType" : "BLOB",
+							   "jsonFormat" : "OSON"
+							},
+							"keyColumn" : {
+							   "name" : "ID",
+							   "assignmentMethod" : "EMBEDDED_OID",
+							   "path" : "_id"
+							},
+							"versionColumn" : {
+								"name" : "VERSION",
+								"method" : "UUID"
+							},
+							"lastModifiedColumn" : {
+								"name" : "LAST_MODIFIED"
+							},
+							"creationTimeColumn" : {
+								"name" : "CREATED_ON"
+							}
+						}"""
+					:"""
+						    				{
+						    "contentColumn" : {
+						       "name" : "DATA"
+						    },
+						    "keyColumn" : {
+						       "name" : "ID",
+						       "assignmentMethod" : "EMBEDDED_OID",
+						       "path" : "_id"
+						    },
+						    "versionColumn" : {
+						        "name" : "VERSION",
+						        "method" : "UUID"
+						    },
+						    "lastModifiedColumn" : {
+						        "name" : "LAST_MODIFIED"
+						    },
+						    "creationTimeColumn" : {
+						        "name" : "CREATED_ON"
+						    }
+						}""";
 
-			cs.execute();
+				LOGGER.info("Using metadata: " + metadata);
+
+				cs.registerOutParameter(3, Types.VARCHAR);
+				cs.setString(1, collectionName);
+				cs.setString(2, metadata);
+
+				cs.execute();
+			}
+
+			return db.openCollection(collectionName);
+		} else { // version >= 23
+			try (CallableStatement cs = db.admin().getConnection().prepareCall("{call DBMS_SODA_ADMIN.CREATE_COLLECTION(P_URI_NAME => ?, P_CREATE_MODE => 'NEW', P_DESCRIPTOR => ?, P_CREATE_TIME => ?, P_23C_DRIVER => true) }")) {
+				final String metadata =
+						String.format("""
+						{
+						    "contentColumn" : {
+						       "name" : "DATA",
+						       "sqlType" : "JSON"
+						    },
+						    "keyColumn" : {
+						       "name" : "ID",
+						       "sqlType": "RAW",
+						       %s
+						    },
+						    "versionColumn" : {
+						        "name" : "VERSION",
+						        "method" : "UUID"
+						    },
+						    "lastModifiedColumn" : {
+						        "name" : "LAST_MODIFIED"
+						    },
+						    "creationTimeColumn" : {
+						        "name" : "CREATED_ON"
+						    },
+						    "readOnly" : false
+						}""", "EMBEDDED_OID".equalsIgnoreCase(IDproperty) ? "\"assignmentMethod\" : \"EMBEDDED_OID\", \"path\" : \"_id\"" :
+								                                            String.format("\"assignmentMethod\" : \"%s\"",IDproperty));
+
+				LOGGER.info("Using metadata: " + metadata);
+
+				cs.registerOutParameter(3, Types.VARCHAR);
+				cs.setString(1, collectionName);
+				cs.setString(2, metadata);
+
+				cs.execute();
+			}
+
+			return db.openCollection(collectionName);
 		}
-
-		return db.openCollection(collectionName);
 	}
 
 	private static void configureSODACollectionForMemoptimizeForWrite(Connection userConnection, String tableName, boolean mongoDBAPICompatible) throws SQLException {
@@ -388,8 +459,10 @@ public class OracleCollectionInfo {
 						s.execute("alter table \"" + tableName + "\" modify constraint " + isJsonConstraintName + " enable novalidate");
 					}
 					else {
-						LOGGER.info("Creating Is JSON constraint NOVALIDATE");
-						s.execute("alter table \"" + tableName + "\" add constraint " + collectionName + "_jd_is_json check (" + (mongoDBAPICompatible ? "data" : "json_document") + " is json format oson (size limit 32m)) novalidate");
+						if( c.getMetaData().getDatabaseMajorVersion() == 19 ) {
+							LOGGER.info("Creating Is JSON constraint NOVALIDATE");
+							s.execute("alter table \"" + tableName + "\" add constraint " + collectionName + "_jd_is_json check (" + (mongoDBAPICompatible ? "data" : "json_document") + " is json format oson (size limit 32m)) novalidate");
+						}
 					}
 					LOGGER.info("OK");
 				}
@@ -670,14 +743,26 @@ public class OracleCollectionInfo {
 								}
 								else {
 									LOGGER.info("Normal index");
-									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getName(), getCreateIndexColumns(collectionName, indexMetadata.getKey(), fieldsInfo), indexMetadata.isUnique());
 
-									LOGGER.info(indexSpec);
-									long start = System.currentTimeMillis();
-									gui.startIndex(indexMetadata.getName());
-									sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
-									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
-									gui.endIndex(indexMetadata.getName());
+									if(indexMetadata.getKey().hasColumns()) {
+										final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getName(), getCreateIndexColumns(collectionName, indexMetadata.getKey(), fieldsInfo), indexMetadata.isUnique());
+
+										LOGGER.info(indexSpec);
+										long start = System.currentTimeMillis();
+										gui.startIndex(indexMetadata.getName());
+										sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
+										LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+										gui.endIndex(indexMetadata.getName());
+									} else {
+										final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getName(), getCreateIndexColumns(collectionName, indexMetadata.getKey(), fieldsInfo), indexMetadata.isUnique());
+
+										LOGGER.warn("Index has no column!");
+										LOGGER.warn(indexSpec);
+										long start = System.currentTimeMillis();
+										gui.startIndex(indexMetadata.getName());
+										LOGGER.warn("Standard SODA index not created!");
+										gui.endIndex(indexMetadata.getName());
+									}
 								}
 							}
 						}
@@ -721,25 +806,25 @@ public class OracleCollectionInfo {
 	private boolean is_IdPK(MetadataKey keys) {
 		final StringBuilder s = new StringBuilder();
 		for (IndexColumn column : keys.columns) {
-			if (s.length() > 0) {
+			if (!s.isEmpty()) {
 				s.append(", ");
 			}
 			s.append(column.name);
 		}
 
-		return "_id".equals(s.toString());
+		return "_id".contentEquals(s);
 	}
 
 	private boolean is_IdPK(Document keys) {
 		final StringBuilder s = new StringBuilder();
 		for (String columnName : keys.keySet()) {
-			if (s.length() > 0) {
+			if (!s.isEmpty()) {
 				s.append(", ");
 			}
 			s.append(columnName);
 		}
 
-		return "_id".equals(s.toString());
+		return "_id".contentEquals(s);
 	}
 
 	private String getCreateIndexColumns(String collectionName, Document keys, Map<String, FieldInfo> fieldsInfo) {
@@ -861,7 +946,7 @@ public class OracleCollectionInfo {
 		for (IndexColumn column : keys.columns) {
 			String columnName = column.name;
 
-			if (s.length() > 0) {
+			if (!s.isEmpty()) {
 				s.append(", ");
 			}
 
