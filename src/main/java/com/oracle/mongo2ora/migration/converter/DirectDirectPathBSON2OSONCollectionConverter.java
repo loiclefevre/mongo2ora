@@ -98,7 +98,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 								Filters.gte("_id", work.minId),
 								Filters.lt("_id", work.maxId)
 						)
-				).hint(useIdIndexHint).batchSize(2048 /*batchSize*2*/).cursor()) {
+				).hint(useIdIndexHint).batchSize(batchSize).cursor()) {
 					//long start = System.currentTimeMillis();
 
 					final EnumSet<OracleConnection.CommitOption> commitOptions = EnumSet.of(

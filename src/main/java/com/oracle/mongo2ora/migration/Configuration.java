@@ -61,6 +61,8 @@ public class Configuration {
 
 	public final  Properties collectionsProperties = new Properties();
 
+	public long dumpBufferSize = 128;
+
 	public static Configuration prepareConfiguration(String[] args) {
 		Configuration conf = new Configuration();
 
@@ -69,7 +71,7 @@ public class Configuration {
 			switch (arg.toLowerCase()) {
 				case "--samples":
 					if (i + 1 < args.length) {
-						conf.samples = Integer.parseInt(args[++i]);
+						conf.samples = Long.parseLong(args[++i]);
 						if(conf.samples <= 0) {
 							displayUsage("Expected valid samples parameter: --samples <strictly positive number of documents>");
 						}
@@ -102,6 +104,15 @@ public class Configuration {
 					}
 					else {
 						displayUsage("Expected valid source parameter: -s <source>");
+					}
+					break;
+
+				case "--dump-buffer-size":
+					if (i + 1 < args.length) {
+						conf.dumpBufferSize = Long.parseLong(args[++i]);;
+					}
+					else {
+						displayUsage("Expected valid --dump-buffer-size parameter: --dump-buffer-size <Mega Bytes of RAM to buffer mongodumps load>");
 					}
 					break;
 
@@ -325,6 +336,7 @@ public class Configuration {
 				.write("--build-secondary-indexes: don't load data, only create secondary indexes (only for mongodumps)").newline()
 				.write("--mongodb-api: makes collection(s) compatible to work with the Oracle Database API for MongoDB").newline()
 				.write("--samples <number>: loads only number of JSON documents into the collection(s) (only for mongodumps)").newline()
+				.write("--dump-buffer-size <number>: Mega Bytes of RAM to buffer mongodumps (default: 128 MB used per thread)").newline()
 		;
 
 		System.exit(1);

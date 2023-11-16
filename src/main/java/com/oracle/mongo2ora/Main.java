@@ -451,9 +451,9 @@ public class Main {
 									clusterCount++;
 									totalCount++;
 
-									// limit cluster size to 100,000 documents or 512 MB
+									// limit cluster size to 100,000 documents or 128 MB
 									boolean sizeOverFlow = false;
-									if ((conf.samples != -1 && totalCount >= conf.samples) || (sizeOverFlow = ((position - clusterStartPosition) > 512L * 1024L * 1024L)) || clusterCount == 100000) {
+									if ((conf.samples != -1 && totalCount >= conf.samples) || (sizeOverFlow = ((position - clusterStartPosition) > conf.dumpBufferSize * 1024L * 1024L)) || clusterCount == 100000) {
 										if (sizeOverFlow) {
 											clusterCount--;
 											count += clusterCount;
@@ -483,7 +483,7 @@ public class Main {
 							}
 
 							if (clusterCount > 0) {
-								final boolean sizeOverFlow = (position - clusterStartPosition) > 512L * 1024L * 1024L;
+								final boolean sizeOverFlow = (position - clusterStartPosition) > conf.dumpBufferSize * 1024L * 1024L;
 								count += clusterCount;
 								publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (position - clusterStartPosition)));
 								//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
