@@ -467,9 +467,9 @@ public class ASCIIGUI extends TimerTask {
 		collectionsProgressBars.get(0).addIndex(indexName, collectionsIndexes.get(0).expectedOracleIndexes);
 	}
 
-	public void endIndex(String indexName) {
-		addNewDestinationDatabaseIndex();
-		collectionsIndexes.get(0).endIndex();
+	public void endIndex(String indexName, boolean success) {
+		if(success) {addNewDestinationDatabaseIndex();
+		collectionsIndexes.get(0).endIndex();}
 	}
 
 	public void setDestinationDatabaseType(String databaseType) {
