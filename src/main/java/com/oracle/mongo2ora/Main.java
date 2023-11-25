@@ -209,6 +209,10 @@ public class Main {
 		final Configuration conf = Configuration.prepareConfiguration(args);
 		//conf.println();
 
+		if(conf.sourceDump && conf.dropAlreadyExistingCollection && conf.buildSecondaryIndexes) {
+			Configuration.displayUsage("Incompatible choices: for a MongoDB dump, you usually don't want to drop collections when asking to rebuild solely the secondary indexes!");
+		}
+
 		gui.setSourceDatabaseName(conf.sourceDatabase);
 		gui.setDestinationDatabaseName(conf.destinationUsername);
 		gui.start();
@@ -417,7 +421,7 @@ public class Main {
 					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes, conf.collectionsProperties);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
-						//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");
+						LOGGER.warn("Collection " + collectionName + " will not be migrated because destination is not empty!");
 						continue;
 					}
 
@@ -592,17 +596,19 @@ public class Main {
 							String IDproperty = conf.collectionsProperties.getProperty(collectionName+".ID","EMBEDDED_OID");
 
 							if("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
+								LOGGER.info("Now recreating ID column...");
 								try (Connection c = pds.getConnection()) {
 									try (Statement s = c.createStatement()) {
 										s.execute("alter table \""+oracleCollectionInfo.getTableName()+"\" add id AS (JSON_VALUE(\"DATA\" FORMAT OSON , '$._id' RETURNING ANY ORA_RAWCOMPARE NO ARRAY ERROR ON ERROR)) MATERIALIZED  NOT NULL ENABLE");
 									}
 								}
+								LOGGER.info("ID column recreation OK");
 							}
 						}
 					}
 
 					// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
-					oracleCollectionInfo.finish(mediumPDS, null, mongoDatabase.getCollectionMetadata(collectionName), conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes, conf.buildSecondaryIndexes);
+					oracleCollectionInfo.finish(mediumPDS, null, mongoDatabase.getCollectionMetadata(collectionName), conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes, conf.buildSecondaryIndexes, ORACLE_MAJOR_VERSION);
 					//gui.finishCollection();
 
 				}
@@ -724,7 +730,7 @@ public class Main {
 					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes, conf.collectionsProperties);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
-						//System.out.println("Collection " + collectionName + " will not be migrated because destination is not empty!");
+						LOGGER.warn("Collection " + collectionName + " will not be migrated because destination is not empty!");
 						continue;
 					}
 
@@ -888,7 +894,7 @@ public class Main {
 					}
 
 					// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
-					oracleCollectionInfo.finish(mediumPDS, mongoCollection, null, conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes, conf.buildSecondaryIndexes);
+					oracleCollectionInfo.finish(mediumPDS, mongoCollection, null, conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes, conf.buildSecondaryIndexes, ORACLE_MAJOR_VERSION);
 					//gui.finishCollection();
 
 				}

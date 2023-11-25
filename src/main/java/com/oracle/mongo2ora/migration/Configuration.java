@@ -316,7 +316,7 @@ public class Configuration {
 		}
 	}
 
-	private static void displayUsage(String msg) {
+	public static void displayUsage(String msg) {
 		if (msg != null && !msg.isEmpty()) {
 			Main.TERM.reset().bold().foreground(TerminalOutput.Color.Red).write(msg).newline().reset();
 		}
@@ -331,7 +331,7 @@ public class Configuration {
 				.write("-b <batch size>: size of batch (default: 4096 JSON documents)").newline()
 				//.write("-a [description]: generate AWR report for Oracle database with optional description (requires Diagnostic Pack for on-premises)").newline()
 				.write("-c <comma-separated list of collection name(s)>: migrate only the selected collection(s)").newline()
-				.write("--drop: drop existing collection(s) from the destination database").newline()
+				.write("--drop: drop existing collection(s) from the destination database (before recreating it if needed)").newline()
 				.write("--skip-secondary-indexes: don't create secondary indexes (only for mongodumps)").newline()
 				.write("--build-secondary-indexes: don't load data, only create secondary indexes (only for mongodumps)").newline()
 				.write("--mongodb-api: makes collection(s) compatible to work with the Oracle Database API for MongoDB").newline()
