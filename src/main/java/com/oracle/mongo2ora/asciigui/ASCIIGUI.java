@@ -79,8 +79,9 @@ public class ASCIIGUI extends TimerTask {
 		term.reset().foreground(speedColor);
 		speedBold = !speedBold;
 		if(speedBold) {
-			if(speedColor != TerminalOutput.Color.White)
-			term.bold();
+			if(speedColor != TerminalOutput.Color.White) {
+				term.bold();
+			}
 		} else {
 			term.normal();
 		}
@@ -301,7 +302,7 @@ public class ASCIIGUI extends TimerTask {
 
 								if( bytesReceivedFromClientRealInMBPerSec >= 0d ) {
 									maxBytesReceivedFromClientRealInMBPerSec = Math.max(maxBytesReceivedFromClientRealInMBPerSec, bytesReceivedFromClientRealInMBPerSec);
-									LOGGER.info("Current throughput: " + bytesReceivedFromClientRealInMBPerSec + " MB/s; Maximum throughput: " + maxBytesReceivedFromClientRealInMBPerSec + " MB/s");
+									//LOGGER.info("Current throughput: " + bytesReceivedFromClientRealInMBPerSec + " MB/s; Maximum throughput: " + maxBytesReceivedFromClientRealInMBPerSec + " MB/s");
 									speedColor = mainProgressBar.setSpeed(bytesReceivedFromClientRealInMBPerSec, maxBytesReceivedFromClientRealInMBPerSec);
 								}
 							}
