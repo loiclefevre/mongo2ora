@@ -1,5 +1,6 @@
 package org.bson;
 
+import oracle.jdbc.driver.json.binary.OsonGeneratorImpl;
 import oracle.sql.json.OracleJsonFactory;
 import oracle.sql.json.OracleJsonGenerator;
 import org.bson.types.Decimal128;
@@ -450,12 +451,20 @@ public class MyBSON2OSONWriter implements BsonWriter {
 
 	@Override
 	public void writeUndefined() {
-		throw new UnsupportedOperationException("Undefined");
+		if (context.getContextType() == BsonContextType.ARRAY) {
+			gen.writeNull();
+		}
+		else {
+			gen.writeNull(this.getName());
+		}
+		state = getNextState();
+
 	}
 
 	@Override
-	public void writeUndefined(String s) {
-		throw new UnsupportedOperationException("Undefined");
+	public void writeUndefined(String name) {
+		this.writeName(name);
+		this.writeNull();
 	}
 
 	@Override
@@ -683,14 +692,17 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	}
 
 	public void reset() {
-		reset(true);
+		reset(false);
 	}
 
-	public void reset(boolean outputOsonFormat) {
+	public void reset(boolean allowDuplicateKeys) {
 		// reset OSON generation
 		oid = null;
 		out.reset();
-		gen = outputOsonFormat ? factory.createJsonBinaryGenerator(out) : factory.createJsonTextGenerator(out);
+		gen = factory.createJsonBinaryGenerator(out); // : factory.createJsonTextGenerator(out);
+		//if(gen instanceof OsonGeneratorImpl) {
+			((OsonGeneratorImpl) gen).setDuplicateKeyMode(allowDuplicateKeys ? OsonGeneratorImpl.DuplicateKeyMode.ALLOW : OsonGeneratorImpl.DuplicateKeyMode.DISALLOW);
+		//}
 		//gen = ogen.wrap(JsonGenerator.class);
 		state = State.INITIAL;
 		context = null;

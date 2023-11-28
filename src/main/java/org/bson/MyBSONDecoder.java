@@ -12,6 +12,7 @@ import java.sql.Statement;
 
 public class MyBSONDecoder {
 	protected final boolean outputOsonFormat;
+	private boolean allowDuplicateKeys;
 	protected int bsonLength;
 	protected String oid;
 	private final MyBSON2OSONWriter writer = new MyBSON2OSONWriter();
@@ -22,10 +23,15 @@ public class MyBSONDecoder {
 		this.outputOsonFormat = outputOsonFormat;
 	}
 
+	public MyBSONDecoder(boolean outputOsonFormat, boolean allowDuplicateKeys) {
+		this.outputOsonFormat = outputOsonFormat;
+		this.allowDuplicateKeys = allowDuplicateKeys;
+	}
+
 	public void convertBSONToOSON(final RawBsonDocument doc) {
 		//System.out.println(doc);
 		reader.reset(doc);
-		writer.reset();
+		writer.reset(allowDuplicateKeys);
 		writer.pipe(reader);
 		bsonLength = reader.getBsonInput().getPosition();
 	}
