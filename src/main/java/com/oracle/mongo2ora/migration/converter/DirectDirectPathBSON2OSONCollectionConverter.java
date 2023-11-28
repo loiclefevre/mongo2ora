@@ -10,7 +10,6 @@ import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.ConversionInformation;
 import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
 import com.oracle.mongo2ora.migration.mongodb.MongoCollectionDump;
-//import oracle.jdbc.driver.DPRowBinder2;
 import oracle.jdbc.driver.DPRowBinder2;
 import oracle.jdbc.internal.OracleConnection;
 import oracle.json.util.HashFuncs;
@@ -25,7 +24,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
 
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
-import static org.bson.MyBSON2OSONWriter.hexa;
 
 public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 	private static final Logger LOGGER = Loggers.getLogger("converter");
@@ -44,8 +42,9 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 	private final String tableName;
 	private final int oracleDBVersion;
 	private final Properties collectionsProperties;
+	private final boolean allowDuplicateKeys;
 
-	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible, int oracleDBVersion, Properties collectionsProperties) {
+	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible, int oracleDBVersion, Properties collectionsProperties, boolean allowDuplicateKeys) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
 		this.tableName = tableName;
@@ -59,6 +58,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 		this.mongoDBAPICompatible = mongoDBAPICompatible;
 		this.oracleDBVersion = oracleDBVersion;
 		this.collectionsProperties = collectionsProperties;
+		this.allowDuplicateKeys = allowDuplicateKeys;
 	}
 
 	@Override
@@ -119,7 +119,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 						try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), "\"" + tableName + "\"", null,
 								"EMBEDDED_OID".equalsIgnoreCase(IDproperty) ?
 								new String[]{"VERSION", "DATA"} : new String[]{"ID", "VERSION", "DATA"} /* String.format("p%d", partitionId),*/)) {
-							final MyBSONDecoder decoder = new MyBSONDecoder(true);
+							final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys);
 
 							if("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
 								// ID column is filled using path expression from document content (usually $._id)
@@ -169,7 +169,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 					}
 					else {
 						try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), "\"" + tableName + "\"", null, new String[]{"ID", "VERSION", "JSON_DOCUMENT"} /* String.format("p%d", partitionId),*/)) {
-							final MyBSONDecoder decoder = new MyBSONDecoder(true);
+							final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys);
 
 							while (cursor.hasNext()) {
 								final RawBsonDocument doc = cursor.next();
