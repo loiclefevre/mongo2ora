@@ -104,7 +104,7 @@ import static java.util.stream.Collectors.toList;
  * - help migration using properties file for per collection configuration (range partitioning, SODA collection columns, types etc..., filtering...)
  */
 public class Main {
-	public static final String VERSION = "1.2.4";
+	public static final String VERSION = "1.2.5";
 
 	private static final Logger LOGGER = Loggers.getLogger("main");
 
@@ -184,6 +184,8 @@ public class Main {
 
 	public static void main(final String[] args) {
 		// For Autonomous Database CMAN load balancing
+		LOGGER.info("===========================================================================================================");
+		LOGGER.info("mongo2ora v"+VERSION+" started!");
 		Security.setProperty("networkaddress.cache.ttl", "0");
 		System.setProperty("oracle.jdbc.fanEnabled", "false");
 
@@ -329,22 +331,6 @@ public class Main {
 				try (Connection c = adminPDS.getConnection()) {
 					ORACLE_MAJOR_VERSION = c.getMetaData().getDatabaseMajorVersion();
 
-/*					if(conf.forceOSON || conf.mongodbAPICompatible) {
-						final int version = c.getMetaData().getDatabaseMajorVersion();
-						if (version < 19) {
-							throw new RuntimeException("You need to be in version 19c minimum, latest Release Update.");
-						}
-						else if (version == 19) {
-							final int ru = c.getMetaData().getDatabaseMinorVersion();
-							if (ru == 17) {
-								throw new RuntimeException("You need to be apply a one-off .");
-							}
-							else if (ru < 17) {
-								throw new RuntimeException("You need to be in version 19.19 minimum, please upgrade.");
-							}
-						}
-					}
-*/
 					try (Statement s = c.createStatement()) {
 						try (ResultSet r = s.executeQuery("select version_full, count(*) from gv$instance group by version_full")) {
 							if (r.next()) {
@@ -393,8 +379,10 @@ public class Main {
 				MONGODB_INDEXES = 0;
 				MongoDatabaseDump mongoDatabase = new MongoDatabaseDump(conf.sourceDumpFolder);
 				for (String c : mongoDatabase.listCollectionsDump()) {
-					MONGODB_COLLECTIONS++;
-					MONGODB_INDEXES += mongoDatabase.getNumberOfIndexesForCollection(c);
+					if (conf.selectedCollections.isEmpty() || conf.selectedCollections.contains(c)) {
+						MONGODB_COLLECTIONS++;
+						MONGODB_INDEXES += mongoDatabase.getNumberOfIndexesForCollection(c);
+					}
 				}
 				gui.setNumberOfMongoDBCollections(MONGODB_COLLECTIONS);
 				gui.setNumberOfMongoDBIndexes(MONGODB_INDEXES);
@@ -566,7 +554,7 @@ public class Main {
 							else {
 */
 								workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-										new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties) :
+										new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys) :
 										new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 								/*							}
 								 */
@@ -694,11 +682,13 @@ public class Main {
 				// get number of indexes in this database
 				MONGODB_INDEXES = 0;
 				for (Document d : mongoDatabase.listCollections()) {
-					MONGODB_COLLECTIONS++;
+					if (conf.selectedCollections.isEmpty() || conf.selectedCollections.contains(d.getString("name"))) {
+						MONGODB_COLLECTIONS++;
 
-					final MongoCollection<Document> collection = mongoDatabase.getCollection(d.getString("name"));
-					for (Document i : collection.listIndexes()) {
-						MONGODB_INDEXES++;
+						final MongoCollection<Document> collection = mongoDatabase.getCollection(d.getString("name"));
+						for (Document i : collection.listIndexes()) {
+							MONGODB_INDEXES++;
+						}
 					}
 				}
 				gui.setNumberOfMongoDBCollections(MONGODB_COLLECTIONS);
@@ -854,7 +844,7 @@ public class Main {
 								}
 								else {
 									workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-											new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties) :
+											new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys) :
 											new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 								}
 
