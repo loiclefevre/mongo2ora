@@ -29,6 +29,8 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 	private static final Logger LOGGER = Loggers.getLogger("converter");
 	private final Semaphore DB_SEMAPHORE;
 
+	private final Semaphore GUNZIP_SEMAPHORE;
+
 	private final CollectionCluster work;
 	private final CompletableFuture<ConversionInformation> publishingCf;
 	private final PoolDataSource pds;
@@ -44,7 +46,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 	private final Properties collectionsProperties;
 	private final boolean allowDuplicateKeys;
 
-	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible, int oracleDBVersion, Properties collectionsProperties, boolean allowDuplicateKeys) {
+	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible, int oracleDBVersion, Properties collectionsProperties, boolean allowDuplicateKeys, Semaphore GUNZIP_SEMAPHORE) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
 		this.tableName = tableName;
@@ -59,6 +61,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 		this.oracleDBVersion = oracleDBVersion;
 		this.collectionsProperties = collectionsProperties;
 		this.allowDuplicateKeys = allowDuplicateKeys;
+		this.GUNZIP_SEMAPHORE = GUNZIP_SEMAPHORE;
 	}
 
 	@Override
@@ -99,7 +102,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 								Filters.lt("_id", work.maxId)
 						)
 				).hint(useIdIndexHint).batchSize(batchSize).cursor()) {
-					//long start = System.currentTimeMillis();
+					long start = System.currentTimeMillis();
 
 					final EnumSet<OracleConnection.CommitOption> commitOptions = EnumSet.of(
 							OracleConnection.CommitOption.WRITEBATCH,
@@ -196,9 +199,9 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 
 					//LOGGER.info("count=" + count + ", mongoDBFetch=" + mongoDBFetch + ", bsonConvert=" + bsonConvert + ", serializeOSON=" + serializeOSON + ", addBatch=" + addBatch + ", jdbcBatchExecute=" + jdbcBatchExecute);
 
-					//final long duration = System.currentTimeMillis() - start;
+					final long duration = System.currentTimeMillis() - start;
 					gui.updateDestinationDatabaseDocuments(count, osonLength);
-					//System.out.println("Thread " + threadId + " got " + count + " docs in " + duration + "ms => " + ((double) count / (double) duration * 1000.0d) + " Docs/s (BSON: " + bsonLength + ", OSON: " + osonLength + ")");
+					LOGGER.info("Thread " + partitionId + " got " + count + " docs in " + duration + "ms => " + ((double) count / (double) duration * 1000.0d) + " Docs/s (BSON: " + bsonLength + ", OSON: " + osonLength + ")");
 				}
 			}
 		}
@@ -210,6 +213,13 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 		finally {
 			//System.out.println("Completed conversion task with: " + bsonLength + ", " + osonLength + "," + count);
 			DB_SEMAPHORE.release();
+//			try {
+//				Thread.sleep(5000L);
+//			}
+//			catch (InterruptedException e) {
+//				throw new RuntimeException(e);
+//			}
+			if(GUNZIP_SEMAPHORE != null) GUNZIP_SEMAPHORE.release();
 			publishingCf.complete(new ConversionInformation(bsonLength, osonLength, count));
 		}
 	}

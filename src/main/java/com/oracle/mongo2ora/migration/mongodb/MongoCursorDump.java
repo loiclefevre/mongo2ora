@@ -12,6 +12,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
@@ -25,7 +26,9 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 	//public InputStream inputStream;
 	public RandomAccessFile file;
 	public FileChannel fileChannel;
-	public MappedByteBuffer buffer;
+	public ByteBuffer buffer;
+
+	public boolean gzipped;
 
 	public MongoCursorDump(FindIterableDump<TResult> findIterable) {
 		this.findIterable = findIterable;
@@ -34,17 +37,22 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 		if (!collectionData.exists()) {
 			collectionData = new File(findIterable.mongoCollectionDump.sourceDumpFolder, findIterable.mongoCollectionDump.name + ".bson.gz");
 			if (!collectionData.exists()) return;
+			gzipped = true;
 		}
 
-		// https://howtodoinjava.com/java/nio/memory-mapped-files-mappedbytebuffer/#:~:text=2.-,Java%20Memory%2DMapped%20Files,as%20a%20very%20large%20array.
-		try {
-			LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " has " + count + " documents (skept "+findIterable.mongoCollectionDump.work.startPosition+" bytes, map "+findIterable.mongoCollectionDump.work.rawSize+" bytes in RAM).");
-			file = new RandomAccessFile(collectionData, "r");
-			fileChannel = file.getChannel();
-			buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, findIterable.mongoCollectionDump.work.startPosition, findIterable.mongoCollectionDump.work.rawSize);
-		}
-		catch (IOException e) {
-			throw new RuntimeException(e);
+		if(gzipped) {
+			buffer = findIterable.mongoCollectionDump.work.buffer;
+		} else {
+			// https://howtodoinjava.com/java/nio/memory-mapped-files-mappedbytebuffer/#:~:text=2.-,Java%20Memory%2DMapped%20Files,as%20a%20very%20large%20array.
+			try {
+				LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " has " + count + " documents (skept " + findIterable.mongoCollectionDump.work.startPosition + " bytes, map " + findIterable.mongoCollectionDump.work.rawSize + " bytes in RAM).");
+				file = new RandomAccessFile(collectionData, "r");
+				fileChannel = file.getChannel();
+				buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, findIterable.mongoCollectionDump.work.startPosition, findIterable.mongoCollectionDump.work.rawSize);
+			}
+			catch (IOException e) {
+				throw new RuntimeException(e);
+			}
 		}
 
 /*		try {
@@ -117,6 +125,9 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 				//LOGGER.info("Collection " + findIterable.mongoCollectionDump.name + " closing inputStream.");
 				inputStream.close();
 			}*/
+			if(buffer != null) {
+				buffer = null;
+			}
 			if (fileChannel != null) {
 				fileChannel.close();
 			}

@@ -2,6 +2,8 @@ package com.oracle.mongo2ora.migration.mongodb;
 
 import org.bson.types.ObjectId;
 
+import java.nio.ByteBuffer;
+
 public class CollectionCluster {
 	public final long count;
 	public final boolean sourceDump;
@@ -23,5 +25,15 @@ public class CollectionCluster {
 		this.startPosition = startPosition;
 		this.sourceDump = true;
 		this.rawSize = rawSize;
+	}
+
+	public ByteBuffer buffer;
+
+	public CollectionCluster(long count, long startPosition, int rawSize, ByteBuffer buffer) {
+		this.count = count;
+		this.startPosition = startPosition;
+		this.sourceDump = true;
+		this.rawSize = rawSize;
+		this.buffer = buffer;
 	}
 }
