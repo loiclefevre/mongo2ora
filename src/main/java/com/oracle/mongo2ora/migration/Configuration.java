@@ -17,8 +17,6 @@ import java.util.List;
 import java.util.Properties;
 
 public class Configuration {
-	public boolean useRSI;
-	public boolean useMemoptimizeForWrite;
 	public boolean dropAlreadyExistingCollection;
 	public String source;
 	public String destination;
@@ -72,6 +70,7 @@ public class Configuration {
 			final String arg = args[i];
 			switch (arg.toLowerCase()) {
 				case "--allow-dup-keys":
+				case "--allow-duplicate-keys":
 					conf.allowDuplicateKeys = true;
 					break;
 				case "--samples":
@@ -191,38 +190,6 @@ public class Configuration {
 					}
 					break;
 
-				case "-r":
-					conf.useRSI = true;
-					break;
-
-				case "-rt":
-					if (i + 1 < args.length) {
-						conf.RSIThreads = Integer.parseInt(args[++i]);
-						if (conf.RSIThreads <= 0) {
-							displayUsage("Expected valid RSI parallel threads parameter: -rt <strictly positive number>");
-						}
-					}
-					else {
-						displayUsage("Expected valid RSI parallel threads parameter: -rt <strictly positive number>");
-					}
-					break;
-
-				case "-rbr":
-					if (i + 1 < args.length) {
-						conf.RSIbufferRows = Integer.parseInt(args[++i]);
-						if (conf.RSIbufferRows < 0) {
-							displayUsage("Expected valid RSI buffer rows parameter: -rbr <positive number, even 0 for auto-configuration>");
-						}
-					}
-					else {
-						displayUsage("Expected valid RSI buffer rows parameter: -rbr <positive number, even 0 for auto-configuration>");
-					}
-					break;
-
-				case "-m":
-					conf.useMemoptimizeForWrite = true;
-					break;
-
 				case "--drop":
 					conf.dropAlreadyExistingCollection = true;
 					break;
@@ -231,6 +198,10 @@ public class Configuration {
 
 		conf.parseSource();
 		conf.parseDestination();
+
+		if(conf.sourceDump && conf.dropAlreadyExistingCollection && conf.buildSecondaryIndexes) {
+			Configuration.displayUsage("Incompatible choices: for a MongoDB dump, you usually don't want to drop collections when asking to rebuild solely the secondary indexes!");
+		}
 
 		return conf;
 	}

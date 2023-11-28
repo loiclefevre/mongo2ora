@@ -91,7 +91,7 @@ public class OracleCollectionInfo {
 	}
 
 	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection,
-																	 boolean autonomousDatabase, boolean useMemoptimizeForWrite, boolean mongoDBAPICompatible, boolean forceOSON,
+																	 boolean autonomousDatabase, boolean mongoDBAPICompatible, boolean forceOSON,
 																	 boolean buildSecondaryIndexes, Properties collectionsProperties) throws SQLException, OracleException {
 		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName, autonomousDatabase);
 
@@ -132,9 +132,6 @@ public class OracleCollectionInfo {
 					else {
 						ret.retrieveTableName(userConnection);
 					}
-					if (useMemoptimizeForWrite) {
-						configureSODACollectionForMemoptimizeForWrite(userConnection, ret.tableName, mongoDBAPICompatible);
-					}
 				}
 				else {
 					ret.retrieveTableName(userConnection);
@@ -155,9 +152,6 @@ public class OracleCollectionInfo {
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
 									}
-									if (useMemoptimizeForWrite) {
-										configureSODACollectionForMemoptimizeForWrite(userConnection, ret.tableName, mongoDBAPICompatible);
-									}
 								}
 								else {
 									// avoid migrating data into non empty destination collection (no conflict to manage)
@@ -173,9 +167,6 @@ public class OracleCollectionInfo {
 									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON, collectionsProperties) : createClassicCollection(db, ret.collectionName, forceOSON);
 									if (sodaCollection == null) {
 										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
-									}
-									if (useMemoptimizeForWrite) {
-										configureSODACollectionForMemoptimizeForWrite(userConnection, ret.tableName, mongoDBAPICompatible);
 									}
 								}
 							}
@@ -421,26 +412,6 @@ public class OracleCollectionInfo {
 			}
 
 			return db.openCollection(collectionName);
-		}
-	}
-
-	private static void configureSODACollectionForMemoptimizeForWrite(Connection userConnection, String tableName, boolean mongoDBAPICompatible) throws SQLException {
-		try (PreparedStatement p = userConnection.prepareStatement("insert into \"" + tableName + "\" (ID,VERSION," + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") values (?,?,?)")) {
-			p.setString(1, "dummy");
-			p.setString(2, "dummy");
-			p.setString(3, "{}");
-			p.executeUpdate();
-			userConnection.commit();
-		}
-
-		try (PreparedStatement p = userConnection.prepareStatement("delete from \"" + tableName + "\" where id=?")) {
-			p.setString(1, "dummy");
-			p.executeUpdate();
-			userConnection.commit();
-		}
-
-		try (Statement s = userConnection.createStatement()) {
-			s.execute("alter table \"" + tableName + "\" memoptimize for write");
 		}
 	}
 

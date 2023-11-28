@@ -144,16 +144,6 @@
             <!-- version>${oracle.jdbc.version}</version -->
 <!--            <version>23.4.0.0</version>-->
         </dependency>
-        <dependency>
-            <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>rsi</artifactId>
-            <version>${oracle.jdbc.version}</version>
-        </dependency>
-        <!-- dependency>
-            <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>rsi</artifactId>
-            <version>${oracle.jdbc.version}</version>
-        </dependency -->
         <!-- dependency>
             <groupId>com.oracle.database.ha</groupId>
             <artifactId>ons</artifactId>

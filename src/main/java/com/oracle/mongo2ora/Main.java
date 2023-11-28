@@ -14,9 +14,6 @@ import com.oracle.mongo2ora.migration.Configuration;
 import com.oracle.mongo2ora.migration.ConversionInformation;
 import com.oracle.mongo2ora.migration.converter.BSON2TextCollectionConverter;
 import com.oracle.mongo2ora.migration.converter.DirectDirectPathBSON2OSONCollectionConverter;
-import com.oracle.mongo2ora.migration.converter.MemoptimizeForWriteBSON2OSONCollectionConverter;
-import com.oracle.mongo2ora.migration.converter.RSIBSON2OSONCollectionConverter;
-import com.oracle.mongo2ora.migration.converter.RSIBSON2TextCollectionConverter;
 import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
 import com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer;
 import com.oracle.mongo2ora.migration.mongodb.MongoDatabaseDump;
@@ -56,9 +53,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.GZIPInputStream;
 
 import static com.mongodb.client.model.Projections.include;
@@ -182,11 +177,10 @@ public class Main {
 		}
 	}
 
-	public static void main(final String[] args) {
-		// For Autonomous Database CMAN load balancing
+	private static void initialize() {
 		LOGGER.info("===========================================================================================================");
 		LOGGER.info("mongo2ora v"+VERSION+" started!");
-		Security.setProperty("networkaddress.cache.ttl", "0");
+		Security.setProperty("networkaddress.cache.ttl", "0"); // For Autonomous Database CMAN load balancing
 		System.setProperty("oracle.jdbc.fanEnabled", "false");
 
 		Locale.setDefault(Locale.US);
@@ -206,40 +200,17 @@ public class Main {
 				BrightYellow + "2" +
 				BrightRed + "Ora" + RESET
 				+ " v" + VERSION + " - the MongoDB to Oracle migration tool ==--" + RESET);
+	}
+
+	public static void main(final String[] args) {
+		initialize();
 
 		// Create configuration related to command line args
 		final Configuration conf = Configuration.prepareConfiguration(args);
-		//conf.println();
-
-		if(conf.sourceDump && conf.dropAlreadyExistingCollection && conf.buildSecondaryIndexes) {
-			Configuration.displayUsage("Incompatible choices: for a MongoDB dump, you usually don't want to drop collections when asking to rebuild solely the secondary indexes!");
-		}
 
 		gui.setSourceDatabaseName(conf.sourceDatabase);
 		gui.setDestinationDatabaseName(conf.destinationUsername);
 		gui.start();
-
-		if (conf.useRSI) {
-			LOGGER.info("RSI threads: " + conf.RSIThreads);
-			rsiWorkerThreadPool = Executors.newFixedThreadPool(conf.RSIThreads
-					,
-					new ThreadFactory() {
-						private final AtomicInteger threadNumber = new AtomicInteger(0);
-						private final ThreadGroup group = new ThreadGroup("MongoDBMigration");
-
-						@Override
-						public Thread newThread(Runnable r) {
-							final Thread t = new Thread(group, r,
-									String.valueOf(threadNumber.getAndIncrement()),
-									0);
-							if (t.isDaemon())
-								t.setDaemon(false);
-							if (t.getPriority() != WANTED_THREAD_PRIORITY)
-								t.setPriority(WANTED_THREAD_PRIORITY);
-							return t;
-						}
-					});
-		}
 
 		// Connect to MongoDB database
 		MongoCredential credential = null;
@@ -277,52 +248,14 @@ public class Main {
 
 		//System.out.println("Counter threads: " + (Math.min(conf.cores * 2, Runtime.getRuntime().availableProcessors())));
 		LOGGER.info("COUNTER THREADS=" + Math.min(conf.cores * 2, Runtime.getRuntime().availableProcessors()));
-		LOGGER.info("COUNTER THREADS PRIORITY=" + (WANTED_THREAD_PRIORITY - 1));
-
-		counterThreadPool = Executors.newVirtualThreadPerTaskExecutor(); /*Executors.newFixedThreadPool(Math.min(conf.cores * 2, Runtime.getRuntime().availableProcessors()), new ThreadFactory() {
-			private final AtomicInteger threadNumber = new AtomicInteger(0);
-			private final ThreadGroup group = new ThreadGroup("MongoDBMigration");
-
-			@Override
-			public Thread newThread(Runnable r) {
-				final Thread t = new Thread(group, r,
-						String.valueOf(threadNumber.getAndIncrement()),
-						0);
-				if (t.isDaemon())
-					t.setDaemon(false);
-				if (t.getPriority() != WANTED_THREAD_PRIORITY - 1)
-					t.setPriority(WANTED_THREAD_PRIORITY - 1);
-				return t;
-			}
-		}); */
-
-//        System.out.println("Worker threads: "+(conf.useRSI ? 2* conf.cores/3 : conf.cores));
-		//System.out.println("Worker threads: 8");
+		counterThreadPool = Executors.newVirtualThreadPerTaskExecutor();
 
 		LOGGER.info("WORKER THREADS=" + conf.cores);
-		LOGGER.info("WORKER THREADS PRIORITY=" + WANTED_THREAD_PRIORITY);
-
-		workerThreadPool = counterThreadPool; /*Executors.newVirtualThreadPerTaskExecutor();*/ /*Executors.newFixedThreadPool(conf.cores, //conf.useRSI ? 2* conf.cores/3 : conf.cores
-				new ThreadFactory() {
-					private final AtomicInteger threadNumber = new AtomicInteger(0);
-					private final ThreadGroup group = new ThreadGroup("MongoDBMigration");
-
-					@Override
-					public Thread newThread(Runnable r) {
-						final Thread t = new Thread(group, r,
-								String.valueOf(threadNumber.getAndIncrement()),
-								0);
-						if (t.isDaemon())
-							t.setDaemon(false);
-						if (t.getPriority() != WANTED_THREAD_PRIORITY)
-							t.setPriority(WANTED_THREAD_PRIORITY);
-						return t;
-					}
-				});*/
+		workerThreadPool = counterThreadPool;
 
 		if (conf.sourceDump) {
 			try {
-				final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.useRSI ? 3 : conf.cores);
+				final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.cores);
 				final PoolDataSource adminPDS = initializeConnectionPool(true, conf.destinationConnectionString, conf.destinationAdminUser, conf.destinationAdminPassword, 3);
 				conf.initializeMaxParallelDegree(adminPDS);
 				gui.setPDS(adminPDS);
@@ -367,10 +300,6 @@ public class Main {
 					sqle.printStackTrace();
 				}
 
-				if (conf.useMemoptimizeForWrite && !AUTONOMOUS_DATABASE) {
-					throw new RuntimeException("Can't use memoptimize for write if target is not an autonomous database!");
-				}
-
 				gui.setsourceDatabaseVersion("(dump)");
 
 				// get number of collections in this database
@@ -406,7 +335,7 @@ public class Main {
 					final long startTimeCollection = System.currentTimeMillis();
 
 					// disable is JSON constraint, remove indexes...
-					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes, conf.collectionsProperties);
+					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes, conf.collectionsProperties);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
 						LOGGER.warn("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -494,32 +423,6 @@ public class Main {
 						int i = 0;
 						final List<CollectionCluster> clusters = new ArrayList<>();
 
-						if (conf.useRSI) {
-							rsi = ReactiveStreamsIngestion
-									.builder()
-									.url("jdbc:oracle:thin:@" + conf.destinationConnectionString)
-									.username(conf.destinationUsername)
-									.password(conf.destinationPassword)
-									.schema(conf.destinationUsername)
-									.executor(rsiWorkerThreadPool)
-									//.bufferInterval(Duration.ofMillis(1000L))
-									.bufferRows(conf.RSIbufferRows /*49676730*/)
-									.rowsPerBatch(conf.batchSize)
-//                            .averageMessageSize(32*1024*1024)
-									//.bufferInterval(Duration.ofSeconds(20))
-//                            .bufferInterval(Duration.ofSeconds(1L))
-									.table(collectionName)
-									.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT"})
-									.useDirectPath()
-									.useDirectPathNoLog()
-									.useDirectPathParallel(true)
-									.useDirectPathSkipIndexMaintenance()
-									.useDirectPathSkipUnusableIndexes()
-									.useDirectPathStorageInit(String.valueOf(8 * 1024 * 1024))
-									.useDirectPathStorageNext(String.valueOf(8 * 1024 * 1024))
-									.build();
-						}
-
 						// source == mongodump
 						if (ORACLE_MAJOR_VERSION >= 23) {
 							String IDproperty = conf.collectionsProperties.getProperty(collectionName+".ID","EMBEDDED_OID");
@@ -575,10 +478,6 @@ public class Main {
 							}
 						}
 
-						if (conf.useRSI) {
-							rsi.close();
-						}
-
 						// source == mongodump
 						if (ORACLE_MAJOR_VERSION >= 23) {
 							String IDproperty = conf.collectionsProperties.getProperty(collectionName+".ID","EMBEDDED_OID");
@@ -626,7 +525,7 @@ public class Main {
 		}
 		else {
 			try (MongoClient mongoClient = MongoClients.create(settings)) {
-				final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.useRSI ? 3 : conf.cores);
+				final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.cores);
 				final PoolDataSource adminPDS = initializeConnectionPool(true, conf.destinationConnectionString, conf.destinationAdminUser, conf.destinationAdminPassword, 3);
 				conf.initializeMaxParallelDegree(adminPDS);
 				gui.setPDS(adminPDS);
@@ -667,10 +566,6 @@ public class Main {
 				}
 				catch (SQLException sqle) {
 					sqle.printStackTrace();
-				}
-
-				if (conf.useMemoptimizeForWrite && !AUTONOMOUS_DATABASE) {
-					throw new RuntimeException("Can't use memoptimize for write if target is not an autonomous database!");
 				}
 
 				MongoDatabase mongoDatabase = mongoClient.getDatabase(conf.sourceDatabase);
@@ -717,7 +612,7 @@ public class Main {
 					final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collectionName);
 
 					// disable is JSON constraint, remove indexes...
-					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.useMemoptimizeForWrite, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes, conf.collectionsProperties);
+					final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes, conf.collectionsProperties);
 
 					if (!oracleCollectionInfo.emptyDestinationCollection) {
 						LOGGER.warn("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -784,32 +679,6 @@ public class Main {
 						int i = 0;
 						final List<CollectionCluster> clusters = new ArrayList<>();
 
-						if (conf.useRSI) {
-							rsi = ReactiveStreamsIngestion
-									.builder()
-									.url("jdbc:oracle:thin:@" + conf.destinationConnectionString)
-									.username(conf.destinationUsername)
-									.password(conf.destinationPassword)
-									.schema(conf.destinationUsername)
-									.executor(rsiWorkerThreadPool)
-									//.bufferInterval(Duration.ofMillis(1000L))
-									.bufferRows(conf.RSIbufferRows /*49676730*/)
-									.rowsPerBatch(conf.batchSize)
-//                            .averageMessageSize(32*1024*1024)
-									//.bufferInterval(Duration.ofSeconds(20))
-//                            .bufferInterval(Duration.ofSeconds(1L))
-									.table(oracleCollectionInfo.getTableName())
-									.columns(new String[]{"ID", /*"CREATED_ON", "LAST_MODIFIED",*/ "VERSION", conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT"})
-									.useDirectPath()
-									.useDirectPathNoLog()
-									.useDirectPathParallel(true)
-									.useDirectPathSkipIndexMaintenance()
-									.useDirectPathSkipUnusableIndexes()
-									.useDirectPathStorageInit(String.valueOf(8 * 1024 * 1024))
-									.useDirectPathStorageNext(String.valueOf(8 * 1024 * 1024))
-									.build();
-						}
-
 						// source == MongoDB database
 						if (ORACLE_MAJOR_VERSION >= 23) {
 							String IDproperty = conf.collectionsProperties.getProperty(collectionName+".ID","EMBEDDED_OID");
@@ -835,18 +704,10 @@ public class Main {
 
 								final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
 								publishingCfsConvert.add(pCf);
-								if (conf.useRSI) {
-									workerThreadPool.execute(AUTONOMOUS_DATABASE ? new RSIBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, rsi, gui, conf.batchSize) :
-											new RSIBSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, rsi, gui, conf.batchSize));
-								}
-								else if (conf.useMemoptimizeForWrite) {
-									workerThreadPool.execute(new MemoptimizeForWriteBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
-								}
-								else {
+
 									workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
 											new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys) :
 											new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
-								}
 
 								i++;
 							}
@@ -863,10 +724,6 @@ public class Main {
 							if (ci.exception != null) {
 								LOGGER.error("Error during ingestion!", ci.exception);
 							}
-						}
-
-						if (conf.useRSI) {
-							rsi.close();
 						}
 
 						// source == mongodump
