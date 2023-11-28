@@ -59,6 +59,8 @@ public class Configuration {
 
 	public long samples = -1;
 
+	public boolean allowDuplicateKeys;
+
 	public final  Properties collectionsProperties = new Properties();
 
 	public long dumpBufferSize = 128;
@@ -69,6 +71,9 @@ public class Configuration {
 		for (int i = 0; i < args.length; i++) {
 			final String arg = args[i];
 			switch (arg.toLowerCase()) {
+				case "--allow-dup-keys":
+					conf.allowDuplicateKeys = true;
+					break;
 				case "--samples":
 					if (i + 1 < args.length) {
 						conf.samples = Long.parseLong(args[++i]);
@@ -109,10 +114,10 @@ public class Configuration {
 
 				case "--dump-buffer-size":
 					if (i + 1 < args.length) {
-						conf.dumpBufferSize = Long.parseLong(args[++i]);;
+						conf.dumpBufferSize = Math.max(16,Long.parseLong(args[++i]));
 					}
 					else {
-						displayUsage("Expected valid --dump-buffer-size parameter: --dump-buffer-size <Mega Bytes of RAM to buffer mongodumps load>");
+						displayUsage("Expected valid --dump-buffer-size parameter: --dump-buffer-size <Mega Bytes of RAM to buffer mongodumps load (minimum 16)>");
 					}
 					break;
 
