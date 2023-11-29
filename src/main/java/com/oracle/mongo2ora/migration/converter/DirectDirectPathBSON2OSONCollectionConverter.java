@@ -23,6 +23,7 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
 
+import static com.oracle.mongo2ora.Main.REPORT;
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
 
 public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
@@ -201,6 +202,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 
 					final long duration = System.currentTimeMillis() - start;
 					gui.updateDestinationDatabaseDocuments(count, osonLength);
+					REPORT.getCollection(collectionName).totalOSONSize += osonLength;
 					LOGGER.info("Thread " + partitionId + " got " + count + " docs in " + duration + "ms => " + ((double) count / (double) duration * 1000.0d) + " Docs/s (BSON: " + bsonLength + ", OSON: " + osonLength + ")");
 				}
 			}

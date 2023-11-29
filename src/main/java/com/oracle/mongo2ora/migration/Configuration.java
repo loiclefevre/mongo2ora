@@ -42,14 +42,9 @@ public class Configuration {
 
 	public final List<String> selectedCollections = new ArrayList<>();
 	public int maxSQLParallelDegree;
-
-	public int RSIThreads = Math.max(1, (int) (Runtime.getRuntime().availableProcessors() / 3));
-
-	public int RSIbufferRows = 64 * 1024;
-
 	public boolean sourceDump;
 
-	public String sourceDumpFolder;
+	public String sourceDumpFolder="";
 	public boolean mongodbAPICompatible;
 	public boolean forceOSON;
 	public boolean skipSecondaryIndexes;

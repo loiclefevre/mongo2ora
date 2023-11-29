@@ -9,6 +9,8 @@ import com.oracle.mongo2ora.migration.mongodb.IndexColumn;
 import com.oracle.mongo2ora.migration.mongodb.MetadataIndex;
 import com.oracle.mongo2ora.migration.mongodb.MetadataKey;
 import com.oracle.mongo2ora.migration.mongodb.MongoDBMetadata;
+import com.oracle.mongo2ora.reporting.IndexReport;
+import com.oracle.mongo2ora.reporting.IndexType;
 import oracle.soda.OracleCollection;
 import oracle.soda.OracleDatabase;
 import oracle.soda.OracleException;
@@ -28,6 +30,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
 
+import static com.oracle.mongo2ora.Main.REPORT;
 import static com.oracle.mongo2ora.util.Tools.getDurationSince;
 
 public class OracleCollectionInfo {
@@ -62,6 +65,7 @@ public class OracleCollectionInfo {
 			try (ResultSet r = p.executeQuery()) {
 				if (r.next()) {
 					this.tableName = r.getString(1);
+					REPORT.getCollection(collectionName).tableName = this.tableName;
 				}
 			}
 		}
@@ -120,6 +124,7 @@ public class OracleCollectionInfo {
 				final OracleDatabase db = cl.getDatabase(userConnection);
 				OracleCollection sodaCollection = db.openCollection(ret.collectionName);
 
+				REPORT.getCollection(collectionName).mongoDBAPICompatible = mongoDBAPICompatible;
 
 				ret.emptyDestinationCollection = true;
 
@@ -143,6 +148,7 @@ public class OracleCollectionInfo {
 								if (dropAlreadyExistingCollection) {
 									LOGGER.warn((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
+									REPORT.getCollection(collectionName).wasDropped = true;
 									LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
 									// TODO manage contentColumn data type:
 									// TODO 21c+ => JSON
@@ -163,6 +169,7 @@ public class OracleCollectionInfo {
 								if (dropAlreadyExistingCollection) {
 									LOGGER.warn((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
 									sodaCollection.admin().drop();
+									REPORT.getCollection(collectionName).wasDropped = true;
 									LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
 									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON, collectionsProperties) : createClassicCollection(db, ret.collectionName, forceOSON);
 									if (sodaCollection == null) {
@@ -497,6 +504,7 @@ public class OracleCollectionInfo {
 					}
 
 					gui.endIndex("primary key", true);
+					REPORT.getCollection(collectionName).addIndex(primaryKeyIndexName != null ? primaryKeyIndexName : "PK_"+collectionName, IndexType.PRIMARY_KEY);
 				}
 
 				// manage other MongoDB indexes
@@ -583,6 +591,7 @@ public class OracleCollectionInfo {
 									s.execute(SQLStatement);
 									LOGGER.info("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 									gui.endIndex(indexMetadata.getString("name"), true);
+									REPORT.getCollection(collectionName).addIndex(indexMetadata.getString("name"), IndexType.GEO_JSON);
 								}
 								else if (is_IdPK(keys)) {
 									/*LOGGER.info("_id field index");
@@ -594,6 +603,14 @@ public class OracleCollectionInfo {
 									/*sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
 									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));*/
 									gui.endIndex(indexMetadata.getString("name"), true);
+
+									for(IndexReport ir : REPORT.getCollection(collectionName).indexes) {
+										if(ir.type == IndexType.PRIMARY_KEY) {
+											s.execute("alter index "+(primaryKeyIndexName != null ? primaryKeyIndexName : "PK_"+collectionName)+" rename to \""+ collectionName + "$"+indexMetadata.getString("name")+"\"");
+											REPORT.getCollection(collectionName).replaceIndex(ir.name,collectionName + "$"+indexMetadata.getString("name"));
+											break;
+										}
+									}
 								}
 								else {
 									LOGGER.info("Normal index");
@@ -606,6 +623,8 @@ public class OracleCollectionInfo {
 									sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
 									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 									gui.endIndex(indexMetadata.getString("name"), true);
+									REPORT.getCollection(collectionName).addIndex(collectionName + "$"+indexMetadata.getString("name"), keys.keySet().size() == 1 ? IndexType.SIMPLE : IndexType.COMPOUND);
+									REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getString("name")).numberOfFields = keys.keySet().size();
 								}
 							}
 						}
@@ -624,6 +643,7 @@ public class OracleCollectionInfo {
 							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON \"%s\" (" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, tableName, maxParallelDegree));
 							LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
 							gui.endIndex("search_index", true);
+							REPORT.getCollection(collectionName).addIndex(String.format("%s$search_index",collectionName), IndexType.JSON_SEARCH);
 						}
 
 						s.execute("ALTER SESSION DISABLE PARALLEL DDL");
@@ -705,6 +725,7 @@ public class OracleCollectionInfo {
 									s.execute(SQLStatement);
 									LOGGER.info("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 									gui.endIndex(indexMetadata.getName(), true);
+									REPORT.getCollection(collectionName).addIndex(collectionName + "$"+indexMetadata.getName(), IndexType.GEO_JSON);
 								}
 								else if (is_IdPK(indexMetadata.getKey())) {
 									/*LOGGER.info("_id field index");
@@ -716,6 +737,14 @@ public class OracleCollectionInfo {
 									/*sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
 									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));*/
 									gui.endIndex(indexMetadata.getName(), true);
+
+									for(IndexReport ir : REPORT.getCollection(collectionName).indexes) {
+										if(ir.type == IndexType.PRIMARY_KEY) {
+											s.execute("alter index "+(primaryKeyIndexName != null ? primaryKeyIndexName : "PK_"+collectionName)+" rename to \""+ collectionName + "$"+indexMetadata.getName()+"\"");
+											REPORT.getCollection(collectionName).replaceIndex(ir.name,collectionName + "$"+indexMetadata.getName());
+											break;
+										}
+									}
 								}
 								else {
 									LOGGER.info("Normal index");
@@ -731,6 +760,8 @@ public class OracleCollectionInfo {
 
 											LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 											gui.endIndex(indexMetadata.getName(), true);
+											REPORT.getCollection(collectionName).addIndex(collectionName + "$"+indexMetadata.getName(), indexMetadata.getKey().isCompound() ? IndexType.COMPOUND : IndexType.SIMPLE);
+											REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getName()).numberOfFields = indexMetadata.getKey().getNumberOfFields();
 										}
 										catch (OracleException oe) {
 											LOGGER.error("Creating index", oe);
@@ -749,6 +780,8 @@ public class OracleCollectionInfo {
 												}*/
 											}
 											gui.endIndex(indexMetadata.getName(), false);
+											REPORT.getCollection(collectionName).addFailedIndex(indexMetadata.getName(),indexMetadata.getKey().isCompound() ? IndexType.COMPOUND : IndexType.SIMPLE);
+											REPORT.getCollection(collectionName).getFailedIndex(indexMetadata.getName()).numberOfFields = indexMetadata.getKey().getNumberOfFields();
 										}
 									}
 									else {
@@ -779,6 +812,7 @@ public class OracleCollectionInfo {
 							s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON \"%s\" (" + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(every \"freq=secondly;interval=1\" MEMORY 2G parallel %d)')", collectionName, tableName, maxParallelDegree));
 							LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
 							gui.endIndex("search_index", true);
+							REPORT.getCollection(collectionName).addIndex(String.format("%s$search_index",collectionName), IndexType.JSON_SEARCH);
 						}
 
 						s.execute("ALTER SESSION DISABLE PARALLEL DDL");

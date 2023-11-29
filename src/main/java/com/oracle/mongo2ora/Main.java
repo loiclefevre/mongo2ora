@@ -41,6 +41,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.Security;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -154,7 +155,7 @@ public class Main {
 	static long position = 0;
 	static long previousPosition = 0;
 
-	private static void skipNextBSONRawData(InputStream input) throws IOException {
+	private static int skipNextBSONRawData(InputStream input) throws IOException {
 		int readBytes = input.read(bsonDataSize, 0, 4);
 		if (readBytes != 4) throw new EOFException();
 
@@ -175,6 +176,8 @@ public class Main {
 
 			i -= skeptBytes;
 		}
+
+		return bsonSize;
 	}
 
 	private static void initialize(Configuration conf) {
@@ -217,13 +220,15 @@ public class Main {
 	public static final LoadingReport REPORT = new LoadingReport();
 
 	public static void main(final String[] args) {
-		try {// Create configuration related to command line args
+		try {
+			// Create configuration related to command line args
 			final Configuration conf = Configuration.prepareConfiguration(args);
 
 			initialize(conf);
 
 			if (conf.sourceDump) {
 				REPORT.source = "MongoDB dump";
+				REPORT.sourceDumpFolder = conf.sourceDumpFolder;
 				loadAllCollectionsFromDumpFiles(conf);
 			}
 			else {
@@ -233,6 +238,7 @@ public class Main {
 		}
 		finally {
 			LOGGER.info(REPORT.toString());
+			TERM.write("A report is available inside mongo2ora.log");
 		}
 	}
 
@@ -305,6 +311,8 @@ public class Main {
 				}
 
 				final long startTimeCollection = System.currentTimeMillis();
+
+				REPORT.addCollection(collectionName, conf.samples != -1);
 
 				final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collectionName);
 
@@ -437,6 +445,8 @@ public class Main {
 				// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
 				oracleCollectionInfo.finish(mediumPDS, mongoCollection, null, conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes, conf.buildSecondaryIndexes, ORACLE_MAJOR_VERSION);
 				//gui.finishCollection();
+
+				computeOracleObjectSize(pds, oracleCollectionInfo);
 			}
 
 			gui.finishLastCollection();
@@ -506,6 +516,8 @@ public class Main {
 
 				final long startTimeCollection = System.currentTimeMillis();
 
+				REPORT.addCollection(collectionName, conf.samples != -1);
+
 				// disable is JSON constraint, remove indexes...
 				final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes, conf.collectionsProperties);
 
@@ -525,6 +537,7 @@ public class Main {
 				oracleCollectionInfo.finish(mediumPDS, null, mongoDatabase.getCollectionMetadata(collectionName), conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes, conf.buildSecondaryIndexes, ORACLE_MAJOR_VERSION);
 				//gui.finishCollection();
 
+				computeOracleObjectSize(pds, oracleCollectionInfo);
 			}
 
 			gui.finishLastCollection();
@@ -551,107 +564,29 @@ public class Main {
 		}
 	}
 
-//	private static void loadCollectionDataFromGzippedDump(Configuration conf, String collectionName, MongoDatabaseDump mongoDatabase, PoolDataSource pds,
-//														  OracleCollectionInfo oracleCollectionInfo, Semaphore DB_SEMAPHORE, File bsonFile) throws IOException, SQLException {
-//		final List<CollectionCluster> publishingCfs = new LinkedList<>();
-//
-//		long count = 0;
-//		position = previousPosition = 0;
-//
-//		try (InputStream inputStream = new GZIPInputStream(new FileInputStream(bsonFile), 128 * 1024 * 1024)) {
-//			long clusterStartPosition = 0;
-//			long clusterCount = 0;
-//			long totalCount = 0;
-//			while (true) {
-//				try {
-//					//final byte[] data = readNextBSONRawData(inputStream);
-//					skipNextBSONRawData(inputStream);
-//					clusterCount++;
-//					totalCount++;
-//
-//					// limit cluster size to 100,000 documents or 128 MB
-//					boolean sizeOverFlow = false;
-//					if ((conf.samples != -1 && totalCount >= conf.samples) || (sizeOverFlow = ((position - clusterStartPosition) > conf.dumpBufferSize * 1024L * 1024L)) || clusterCount == 100000) {
-//						if (sizeOverFlow) {
-//							clusterCount--;
-//							count += clusterCount;
-//							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (previousPosition - clusterStartPosition)));
-//							//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
-//							gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long) ((double) (previousPosition - clusterStartPosition) / (double) clusterCount));
-//							clusterCount = 1;
-//							clusterStartPosition = previousPosition;
-//						}
-//						else {
-//							count += clusterCount;
-//							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (position - clusterStartPosition)));
-//							//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
-//							gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long) ((double) (position - clusterStartPosition) / (double) clusterCount));
-//							clusterCount = 0;
-//							clusterStartPosition = position;
-//
-//							if (conf.samples != -1 && totalCount >= conf.samples) {
-//								break;
-//							}
-//						}
-//					}
-//				}
-//				catch (EOFException eof) {
-//					break;
-//				}
-//			}
-//
-//			if (clusterCount > 0) {
-//				final boolean sizeOverFlow = (position - clusterStartPosition) > conf.dumpBufferSize * 1024L * 1024L;
-//				count += clusterCount;
-//				publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (position - clusterStartPosition)));
-//				//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
-//				gui.updateSourceDatabaseDocuments(clusterCount, (long) ((double) (position - clusterStartPosition) / (double) clusterCount));
-//			}
-//		}
-//
-//		LOGGER.info("Collection " + collectionName + " has " + count + " JSON document(s).");
-//
-//		final List<CompletableFuture<ConversionInformation>> publishingCfsConvert = new LinkedList<>();
-//		final List<CollectionCluster> mongoDBCollectionClusters = new ArrayList<>();
-//
-//		//long total = 0;
-//		int i = 0;
-//		final List<CollectionCluster> clusters = new ArrayList<>();
-//
-//		for (CollectionCluster cc : publishingCfs) {
-//			clusters.add(cc);
-//
-//			if (cc.count > 0) {
-//				//total += cc.count;
-//				mongoDBCollectionClusters.add(cc);
-//
-//				final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
-//				publishingCfsConvert.add(pCf);
-//
-//				workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-//						new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys) :
-//						new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
-//
-//				i++;
-//			}
-//		}
-//
-//		clusters.clear();
-//
-//		final List<ConversionInformation> informations = publishingCfsConvert.stream().map(CompletableFuture::join).collect(toList());
-//
-//		for (ConversionInformation ci : informations) {
-//			if (ci.exception != null) {
-//				LOGGER.error("Error during ingestion!", ci.exception);
-//			}
-//		}
-//	}
+	private static void computeOracleObjectSize(PoolDataSource pds, OracleCollectionInfo oracleCollectionInfo) {
+		try(Connection c = pds.getConnection()) {
+			try(PreparedStatement p = c.prepareStatement("select sum(bytes) from user_segments where segment_name=?")) {
+				p.setString(1,oracleCollectionInfo.getTableName());
+				try(ResultSet r = p.executeQuery()) {
+					if(r.next()) {
+						REPORT.getCollection(oracleCollectionInfo.getCollectionName()).tableSize = r.getLong(1);
+					}
+				}
+			}
+		}
+		catch(SQLException sqle) {
+			LOGGER.error("While retrieving objects size in Oracle for "+oracleCollectionInfo.getCollectionName(),sqle);
+		}
+	}
+
+
 	private static void loadCollectionDataFromGzippedDump(Configuration conf, String collectionName, MongoDatabaseDump mongoDatabase, PoolDataSource pds,
 														  OracleCollectionInfo oracleCollectionInfo, Semaphore DB_SEMAPHORE, File bsonFile) throws IOException, SQLException {
-		final List<CollectionCluster> publishingCfs = new LinkedList<>();
 		final List<CompletableFuture<ConversionInformation>> publishingCfsConvert = new LinkedList<>();
 
 		long count = 0;
+		long totalBSONSize = 0;
 		position = previousPosition = 0;
 
 		final Semaphore GUNZIP_SEMAPHORE = new Semaphore(conf.cores);
@@ -661,13 +596,6 @@ public class Main {
 			long clusterCount = 0;
 			long totalCount = 0;
 
-//			try {
-//				GUNZIP_SEMAPHORE.acquire();
-//			}
-//			catch (InterruptedException e) {
-//				throw new RuntimeException(e);
-//			}
-
 			// read until end of gzipped stream
 			ByteBuffer buffer = ByteBuffer.allocateDirect((int)(conf.dumpBufferSize * 1024L * 1024L));
 
@@ -675,6 +603,7 @@ public class Main {
 			while (true) {
 				try {
 					final byte[] data = readNextBSONRawData(inputStream);
+					totalBSONSize += data.length;
 					clusterCount++;
 					totalCount++;
 
@@ -718,32 +647,6 @@ public class Main {
 						clusterStartPosition = previousPosition;
 					}
 
-
-
-
-
-
-
-					// limit cluster size to 100,000 documents or 128 MB
-//					boolean sizeOverFlow = false;
-//					if ((conf.samples != -1 && totalCount >= conf.samples) || (sizeOverFlow = ((position - clusterStartPosition) > conf.dumpBufferSize * 1024L * 1024L)) || clusterCount == 100000) {
-//						if (sizeOverFlow) {
-//							clusterCount--;
-//							count += clusterCount;
-//							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (previousPosition - clusterStartPosition)));
-//							//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
-//							gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long) ((double) (previousPosition - clusterStartPosition) / (double) clusterCount));
-//							clusterCount = 1;
-//							clusterStartPosition = previousPosition;
-//						}
-//						else {
-//							count += clusterCount;
-//							publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (position - clusterStartPosition)));
-//							//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
-//							gui.updateSourceDatabaseDocuments(clusterCount, clusterCount == 0 ? 0 : (long) ((double) (position - clusterStartPosition) / (double) clusterCount));
-//							clusterCount = 0;
-//							clusterStartPosition = position;
-//
 							if (conf.samples != -1 && totalCount >= conf.samples) {
 								break;
 							}
@@ -782,33 +685,9 @@ public class Main {
 
 		LOGGER.info("Collection " + collectionName + " has " + count + " JSON document(s).");
 
-//		final List<CompletableFuture<ConversionInformation>> publishingCfsConvert = new LinkedList<>();
-//		final List<CollectionCluster> mongoDBCollectionClusters = new ArrayList<>();
-//
-//		//long total = 0;
-//		int i = 0;
-//		final List<CollectionCluster> clusters = new ArrayList<>();
-//
-//		for (CollectionCluster cc : publishingCfs) {
-//			clusters.add(cc);
-//
-//			if (cc.count > 0) {
-//				//total += cc.count;
-//				mongoDBCollectionClusters.add(cc);
-//
-//				final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
-//				publishingCfsConvert.add(pCf);
-//
-//				workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-//						new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys) :
-//						new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
-//
-//				i++;
-//			}
-//		}
-//
-//		clusters.clear();
-//
+		REPORT.getCollection(collectionName).totalDocumentsLoaded = count;
+		REPORT.getCollection(collectionName).totalBSONSize = totalBSONSize;
+
 		final List<ConversionInformation> informations = publishingCfsConvert.stream().map(CompletableFuture::join).collect(toList());
 
 		for (ConversionInformation ci : informations) {
@@ -823,6 +702,7 @@ public class Main {
 		final List<CollectionCluster> publishingCfs = new LinkedList<>();
 
 		long count = 0;
+		long totalBSONSize = 0;
 		position = previousPosition = 0;
 
 		try (InputStream inputStream = new BufferedInputStream(new FileInputStream(bsonFile), 128 * 1024 * 1024)) {
@@ -831,8 +711,7 @@ public class Main {
 			long totalCount = 0;
 			while (true) {
 				try {
-					//final byte[] data = readNextBSONRawData(inputStream);
-					skipNextBSONRawData(inputStream);
+					totalBSONSize += skipNextBSONRawData(inputStream);
 					clusterCount++;
 					totalCount++;
 
@@ -877,6 +756,9 @@ public class Main {
 		}
 
 		LOGGER.info("Collection " + collectionName + " has " + count + " JSON document(s).");
+
+		REPORT.getCollection(collectionName).totalDocumentsLoaded = count;
+		REPORT.getCollection(collectionName).totalBSONSize = totalBSONSize;
 
 		final List<CompletableFuture<ConversionInformation>> publishingCfsConvert = new LinkedList<>();
 		final List<CollectionCluster> mongoDBCollectionClusters = new ArrayList<>();
@@ -969,6 +851,9 @@ public class Main {
 						pos = oracleVersion.indexOf('.', pos + 1);
 						gui.setDestinationDatabaseVersion(oracleVersion.substring(0, pos));
 						gui.setDestinationDatabaseInstances(r.getInt(2));
+
+						REPORT.oracleVersion = oracleVersion.substring(0, pos);
+						REPORT.oracleInstanceNumber = r.getInt(2);
 					}
 				}
 
@@ -986,6 +871,7 @@ public class Main {
 						//setDBName(r.getString(1));
 						//setRegion(r.getString(2));
 						//setBaseSize(r.getLong(3)/1024d/1024d/1024d);
+						REPORT.oracleDatabaseType = "Oracle Autonomous "+r.getString(5)+" ("+AUTONOMOUS_DATABASE_TYPE+")";
 					}
 				}
 				catch (SQLException ignored) {

@@ -10,6 +10,8 @@ import org.bson.types.ObjectId;
 
 import java.util.concurrent.CompletableFuture;
 
+import static com.oracle.mongo2ora.Main.REPORT;
+
 // TODO: dychotomic search
 // TODO: see https://github.com/mongodb/mongo-hadoop/blob/master/core/src/main/java/com/mongodb/hadoop/splitter/SampleSplitter.java
 public class CollectionClusteringAnalyzer implements Runnable {
@@ -52,6 +54,8 @@ public class CollectionClusteringAnalyzer implements Runnable {
 
 			if (docNumber > 0) {
 				gui.updateSourceDatabaseDocuments(docNumber, averageDocSize);
+				REPORT.getCollection(collectionName).totalDocumentsLoaded += docNumber;
+				REPORT.getCollection(collectionName).totalBSONSize += docNumber * averageDocSize;
 			}
 		}
 		finally {

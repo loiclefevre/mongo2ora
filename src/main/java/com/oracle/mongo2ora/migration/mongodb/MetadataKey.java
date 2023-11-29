@@ -26,4 +26,11 @@ public class MetadataKey {
 	public boolean hasColumns() {
 		return !columns.isEmpty();
 	}
+	public boolean isCompound() {
+		return columns.size() > 1;
+	}
+
+	public int getNumberOfFields() {
+		return columns.size();
+	}
 }
