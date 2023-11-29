@@ -113,10 +113,10 @@ public class Configuration {
 
 				case "--dump-buffer-size":
 					if (i + 1 < args.length) {
-						conf.dumpBufferSize = Math.max(16,Long.parseLong(args[++i]));
+						conf.dumpBufferSize = Math.min(2047,Math.max(16,Long.parseLong(args[++i])));
 					}
 					else {
-						displayUsage("Expected valid --dump-buffer-size parameter: --dump-buffer-size <Mega Bytes of RAM to buffer mongodumps load (minimum 16)>");
+						displayUsage("Expected valid --dump-buffer-size parameter: --dump-buffer-size <Mega Bytes of RAM to buffer mongodumps load (minimum 16, maximum 2047)>");
 					}
 					break;
 

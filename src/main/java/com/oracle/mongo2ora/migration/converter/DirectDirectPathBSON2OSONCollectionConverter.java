@@ -110,14 +110,14 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 
 					final byte[] version = "1".getBytes();
 
-					LOGGER.warn("Preparing direct path API with table: "+tableName+ " (MongoDB API compatible: "+this.mongoDBAPICompatible+")");
+					//LOGGER.warn("Preparing direct path API with table: "+tableName+ " (MongoDB API compatible: "+this.mongoDBAPICompatible+")");
 
 					if (this.mongoDBAPICompatible || oracleDBVersion >= 23) {
-						LOGGER.warn("Loading table "+tableName+" with MongoDB API compatibility with VERSION and DATA...");
+						//LOGGER.warn("Loading table "+tableName+" with MongoDB API compatibility with VERSION and DATA...");
 
 						String IDproperty = collectionsProperties.getProperty(collectionName+".ID","EMBEDDED_OID");
 
-						LOGGER.info("Columns used for Direct Path API: "+("EMBEDDED_OID".equalsIgnoreCase(IDproperty) ? "VERSION, DATA" : "ID, VERSION, DATA"));
+						//LOGGER.info("Columns used for Direct Path API: "+("EMBEDDED_OID".equalsIgnoreCase(IDproperty) ? "VERSION, DATA" : "ID, VERSION, DATA"));
 
 						try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), "\"" + tableName + "\"", null,
 								"EMBEDDED_OID".equalsIgnoreCase(IDproperty) ?

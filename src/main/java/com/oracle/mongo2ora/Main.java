@@ -20,6 +20,7 @@ import com.oracle.mongo2ora.migration.mongodb.MongoDatabaseDump;
 import com.oracle.mongo2ora.migration.oracle.MediumServiceManager;
 import com.oracle.mongo2ora.migration.oracle.OracleAutoTasks;
 import com.oracle.mongo2ora.migration.oracle.OracleCollectionInfo;
+import com.oracle.mongo2ora.reporting.LoadingReport;
 import com.oracle.mongo2ora.util.Kernel32;
 import com.oracle.mongo2ora.util.XYTerminalOutput;
 import net.rubygrapefruit.platform.Native;
@@ -213,17 +214,25 @@ public class Main {
 		workerThreadPool = counterThreadPool;
 	}
 
+	public static final LoadingReport REPORT = new LoadingReport();
+
 	public static void main(final String[] args) {
-		// Create configuration related to command line args
-		final Configuration conf = Configuration.prepareConfiguration(args);
+		try {// Create configuration related to command line args
+			final Configuration conf = Configuration.prepareConfiguration(args);
 
-		initialize(conf);
+			initialize(conf);
 
-		if (conf.sourceDump) {
-			loadAllCollectionsFromDumpFiles(conf);
+			if (conf.sourceDump) {
+				REPORT.source = "MongoDB dump";
+				loadAllCollectionsFromDumpFiles(conf);
+			}
+			else {
+				REPORT.source = "MongoDB database";
+				loadAllCollectionsFromDatabase(conf);
+			}
 		}
-		else {
-			loadAllCollectionsFromDatabase(conf);
+		finally {
+			LOGGER.info(REPORT.toString());
 		}
 	}
 
@@ -276,6 +285,9 @@ public class Main {
 			gui.setNumberOfMongoDBIndexes(MONGODB_INDEXES);
 			gui.setNumberOfMongoDBJSONDocuments(0);
 			gui.setTotalMongoDBSize(0);
+
+			REPORT.numberOfCollections = MONGODB_COLLECTIONS;
+			REPORT.numberOfIndexes = MONGODB_INDEXES;
 
 			// Disabling Automatic ADB-S tasks if any
 			OracleAutoTasks.disableIfNeeded(adminPDS);
@@ -476,6 +488,9 @@ public class Main {
 			gui.setNumberOfMongoDBIndexes(MONGODB_INDEXES);
 			gui.setNumberOfMongoDBJSONDocuments(0);
 			gui.setTotalMongoDBSize(0);
+
+			REPORT.numberOfCollections = MONGODB_COLLECTIONS;
+			REPORT.numberOfIndexes = MONGODB_INDEXES;
 
 			// Disabling Automatic ADB-S tasks if any
 			OracleAutoTasks.disableIfNeeded(adminPDS);
