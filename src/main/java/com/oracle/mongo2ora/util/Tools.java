@@ -13,6 +13,18 @@ public class Tools {
 		}
 	}
 
+	public static String getHumanReadableSize(long bytes) {
+		if (bytes / (1024d * 1024d * 1024d) > 1024d) {
+			return String.format("%.1f TB", bytes / (1024d * 1024d * 1024d * 1024d));
+		}
+		else if (bytes / (1024d * 1024d) > 1024d) {
+			return String.format("%.1f GB", bytes / (1024d * 1024d * 1024d));
+		}
+		else {
+			return String.format("%.1f MB", bytes / (1024d * 1024d));
+		}
+	}
+
 	public static void sleep(long ms) {
 		try {
 			Thread.sleep(ms);

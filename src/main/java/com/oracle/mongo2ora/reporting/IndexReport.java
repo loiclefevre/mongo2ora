@@ -6,6 +6,9 @@ public class IndexReport {
 	public final IndexType type;
 
 	public int numberOfFields=1;
+	public long indexSize;
+	public String materializedViewName;
+	public long materializedViewSize;
 
 	public IndexReport(String name, IndexType type) {
 		this.name = name;

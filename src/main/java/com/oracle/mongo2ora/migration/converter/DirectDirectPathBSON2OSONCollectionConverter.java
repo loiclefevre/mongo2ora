@@ -14,6 +14,8 @@ import oracle.jdbc.driver.DPRowBinder2;
 import oracle.jdbc.internal.OracleConnection;
 import oracle.json.util.HashFuncs;
 import oracle.ucp.jdbc.PoolDataSource;
+import org.bson.BsonDocument;
+import org.bson.BsonInvalidOperationException;
 import org.bson.MyBSONDecoder;
 import org.bson.RawBsonDocument;
 
@@ -127,13 +129,32 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 
 							if("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
 								// ID column is filled using path expression from document content (usually $._id)
+								//long maxOSONLength = 0;
+								//RawBsonDocument largestBSONDoc = null;
 								while (cursor.hasNext()) {
 									final RawBsonDocument doc = cursor.next();
+
+/*									BsonDocument b = doc.getDocument("_id");
+									try {
+										if ("0000000011801625".equals(b.getString("0125").getValue()) &&
+												"PAM202100007878".equals(b.getString("0655").getValue()) &&
+												"20250114".equals(b.getString("0659").getValue())
+
+										) {
+											LOGGER.info(count + ": " + doc.toJson());
+										}
+									} catch(BsonInvalidOperationException ignored) {}
+*/
 									decoder.convertBSONToOSON(doc);
 									bsonLength += decoder.getBsonLength();
 
 									final byte[] osonData = decoder.getOSONData();
 									osonLength += osonData.length;
+
+									/*if(osonData.length > maxOSONLength) {
+										maxOSONLength = osonData.length;
+										largestBSONDoc = doc;
+									}*/
 
 									p.beginNew();
 									p.append(version);
@@ -141,6 +162,16 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 									p.finish();
 									count++;
 								}
+
+//								if(count > 0) {
+//									LOGGER.info("Largest OSON size: " + maxOSONLength);
+//									if(largestBSONDoc != null) {
+//										LOGGER.info("Largest OSON doc: " + largestBSONDoc.toJson());
+//									} else {
+//										LOGGER.info("Largest OSON doc: {}");
+//									}
+//								}
+
 							} else {
 								// ID column is filled using generated value either present from the document or in the case there is none from a random generator
 								final HashFuncs uuidGenerator = new HashFuncs();
@@ -210,6 +241,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 		catch (
 				Exception e) {
 			//e.printStackTrace();
+			LOGGER.error("Could not load BSON documents!", e);
 			publishingCf.complete(new ConversionInformation(e));
 		}
 		finally {

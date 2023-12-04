@@ -59,12 +59,21 @@ public class MyBSONDecoder {
 		/*String j = "{\"_id\":{\"$oid\":\"6482ed016c008c89fcb2d017\"},\"fechaValor\":{\"$date\":\"2023-06-06T00:00:00Z\"},\"idContrato\":\"004900013003049005\",\"idMov\":\"2023060621032120118000019004900013003049005000658IP29100490001\",\"centroOrigen\":\"0001\",\"codigoOperacion\":\"069\",\"codigoOperacionBancaria\":\"044\",\"codigoOperacionBasica\":\"050\",\"descripcion\":\"BIZUM DE Mirabel Madrigal CONCEPTO Concepto de prueba\",\"descripcionGenerica\":\"APLICACION DE ORDENES\",\"divisa\":\"EUR\",\"empresaOrigen\":\"0049\",\"estado\":\"NR\",\"fechaAnotacion\":{\"$date\":\"2023-06-09T00:00:00Z\"},\"fechaContable\":{\"$date\":\"2023-06-06T00:00:00Z\"},\"fechaOperacion\":{\"$date\":\"2023-06-06T21:03:21.201Z\"},\"importe\":{\"$numberDecimal\":\"0.01\"},\"numDgo\":658,\"numMovimiento\":19,\"numOrden\":19,\"numeroDocumento\":\"\",\"posicionSaldo\":\"000\",\"referencia1\":\"\",\"referencia2\":\"\",\"saldo\":{\"$numberDecimal\":\"18672.88\"},\"signoMovimiento\":\"Haber\",\"terminalBTO\":\"IP291\",\"timestamps\":{\"tsOBMOVTOS1\":2.0231572103212365E+18},\"tipoOperacion\":\"ABONO-TRANSFERENCIA\",\"tsAbInitio\":\"1686078201886\",\"tsHost\":\"1686078201251\",\"transactionInternalReference\":\"004900017650189164\"}";*/
 		//String j = "{\"numDgo\":658}";
 		//String j = "{\"numDgo\":{\"$numberDecimal\":\"658\"}}";
-		String j = "{\"test\":true, \"_id\": {\"$oid\":\"655471d50a6a7c1864ffa194\"}}";
-		MyBSONDecoder dec = new MyBSONDecoder(true);
-		dec.convertBSONToOSON(RawBsonDocument.parse(j));
+
+		String j = Files.readString(new File("test2.json").toPath());
+
+		MyBSONDecoder dec = new MyBSONDecoder(true, true);
+		dec.convertBSONToOSON( RawBsonDocument.parse(j) );
 		FileOutputStream o = new FileOutputStream("test.oson.out");
 		o.write(dec.getOSONData());
 		o.close();
+
+//		String j = "{\"test\":true, \"_id\": {\"$oid\":\"655471d50a6a7c1864ffa194\"}}";
+//		MyBSONDecoder dec = new MyBSONDecoder(true);
+//		dec.convertBSONToOSON(RawBsonDocument.parse(j));
+//		FileOutputStream o = new FileOutputStream("test.oson.out");
+//		o.write(dec.getOSONData());
+//		o.close();
 
 /*
 		Class.forName("oracle.jdbc.driver.OracleDriver");

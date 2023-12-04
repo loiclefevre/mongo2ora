@@ -1,5 +1,7 @@
 package com.oracle.mongo2ora.migration;
 
+import com.mongodb.diagnostics.logging.Logger;
+import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.Main;
 import net.rubygrapefruit.platform.terminal.TerminalOutput;
 import oracle.ucp.jdbc.PoolDataSource;
@@ -17,6 +19,7 @@ import java.util.List;
 import java.util.Properties;
 
 public class Configuration {
+	private static final Logger LOGGER = Loggers.getLogger("Configuration");
 	public boolean dropAlreadyExistingCollection;
 	public String source;
 	public String destination;
@@ -57,6 +60,8 @@ public class Configuration {
 	public final  Properties collectionsProperties = new Properties();
 
 	public long dumpBufferSize = 128;
+	public boolean buildIndexesLikeMiguel;
+	public boolean compressedOSON;
 
 	public static Configuration prepareConfiguration(String[] args) {
 		Configuration conf = new Configuration();
@@ -64,6 +69,14 @@ public class Configuration {
 		for (int i = 0; i < args.length; i++) {
 			final String arg = args[i];
 			switch (arg.toLowerCase()) {
+				case "--miguel-indexes":
+					conf.buildIndexesLikeMiguel = true;
+				break;
+
+				case "--compressed-json":
+					conf.compressedOSON = true;
+				break;
+
 				case "--allow-dup-keys":
 				case "--allow-duplicate-keys":
 					conf.allowDuplicateKeys = true;
@@ -188,6 +201,10 @@ public class Configuration {
 				case "--drop":
 					conf.dropAlreadyExistingCollection = true;
 					break;
+
+				default:
+					LOGGER.warn("Unknown CLI parameter '"+arg+"'");
+					displayUsage("Unknown CLI parameter '"+arg+"'");
 			}
 		}
 

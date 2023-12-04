@@ -1,5 +1,7 @@
 package com.oracle.mongo2ora.reporting;
 
+import com.oracle.mongo2ora.util.Tools;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -50,10 +52,10 @@ public class LoadingReport {
 			r.append("===============================================================================\n");
 			r.append("  ").append(cr.collectionName).append('\n');
 			r.append("  - Document(s) loaded ...... ").append(cr.totalDocumentsLoaded).append(cr.sampling?" (sampling)":"").append('\n');
-			r.append("  - BSON size ............... ").append(cr.totalBSONSize).append(" bytes\n");
-			r.append("  - OSON size ............... ").append(cr.totalOSONSize).append(" bytes\n");
+			r.append("  - BSON size ............... ").append(Tools.getHumanReadableSize(cr.totalBSONSize)).append('\n');
+			r.append("  - OSON size ............... ").append(Tools.getHumanReadableSize(cr.totalOSONSize)).append('\n');
 			r.append("  - Table name .............. ").append(cr.tableName).append('\n');
-			r.append("  - Table size .............. ").append(cr.tableSize).append(" bytes\n");
+			r.append("  - Table size .............. ").append(Tools.getHumanReadableSize(cr.tableSize)).append('\n');
 			if(cr.wasDropped) r.append("  - Was dropped ............. Yes\n");
 			r.append("  - MongoDB API compatible .. ").append(cr.mongoDBAPICompatible?"Yes":"No").append('\n');
 			r.append("  - Created index(es) ....... ").append(cr.indexes.size()).append('\n');
@@ -63,10 +65,16 @@ public class LoadingReport {
 			for(IndexReport ir : cr.indexes) {
 				r.append("  - Index #").append(i).append(' ').append(ir.name).append('\n');
 				r.append("    - Type .................. ").append(ir.type.name).append('\n');
-				if(ir.type == IndexType.COMPOUND)
+				if(ir.type == IndexType.COMPOUND || ir.type == IndexType.COMPOUND_MV)
 					r.append("    - Fields ................ ").append(ir.numberOfFields).append('\n');
 				else
 					r.append("    - Fields ................ 1\n");
+				r.append("    - Size .................. ").append(Tools.getHumanReadableSize(ir.indexSize)).append('\n');
+				if(ir.type == IndexType.COMPOUND_MV || ir.type == IndexType.SIMPLE_MV) {
+					r.append("    - Materialized View ..... ").append(ir.materializedViewName).append('\n');
+					r.append("        - MV Size ........... ").append(Tools.getHumanReadableSize(ir.materializedViewSize)).append('\n');
+				}
+
 
 				i++;
 			}

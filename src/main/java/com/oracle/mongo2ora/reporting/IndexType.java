@@ -5,8 +5,11 @@ public enum IndexType {
 	JSON_SEARCH("JSON Search (full-text)"),
 	MULTIVALUE("Multivalue (array)"),
 	COMPOUND("Multiple JSON fields"),
+	COMPOUND_MV("Multiple JSON fields (Materialized View based)"),
 	SIMPLE("Single JSON field"),
-	GEO_JSON("Spatial");
+	SIMPLE_MV("Single JSON field (Materialized View based)"),
+	GEO_JSON("Spatial"),
+	SHARDED("Sharded");
 
 	public final String name;
 

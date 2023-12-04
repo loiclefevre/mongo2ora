@@ -20,6 +20,7 @@ import com.oracle.mongo2ora.migration.mongodb.MongoDatabaseDump;
 import com.oracle.mongo2ora.migration.oracle.MediumServiceManager;
 import com.oracle.mongo2ora.migration.oracle.OracleAutoTasks;
 import com.oracle.mongo2ora.migration.oracle.OracleCollectionInfo;
+import com.oracle.mongo2ora.reporting.IndexReport;
 import com.oracle.mongo2ora.reporting.LoadingReport;
 import com.oracle.mongo2ora.util.Kernel32;
 import com.oracle.mongo2ora.util.XYTerminalOutput;
@@ -101,7 +102,7 @@ import static java.util.stream.Collectors.toList;
  * - help migration using properties file for per collection configuration (range partitioning, SODA collection columns, types etc..., filtering...)
  */
 public class Main {
-	public static final String VERSION = "1.2.5";
+	public static final String VERSION = "1.3.0";
 
 	private static final Logger LOGGER = Loggers.getLogger("main");
 
@@ -120,6 +121,8 @@ public class Main {
 
 	public static boolean AUTONOMOUS_DATABASE = false;
 	public static int ORACLE_MAJOR_VERSION = -1;
+
+	public static String MAX_STRING_SIZE = "STANDARD";
 	public static String AUTONOMOUS_DATABASE_TYPE = "";
 
 	private final static byte[] bsonDataSize = new byte[4];
@@ -271,6 +274,9 @@ public class Main {
 			// Get destination database information
 			displayOracleDatabaseVersion(adminPDS);
 
+			// Grant create job and CTX_DDL for managing Search indexes...
+			grantPrivilegesToDestinationUser(conf, adminPDS);
+
 			MongoDatabase mongoDatabase = mongoClient.getDatabase(conf.sourceDatabase);
 			final Document result = mongoDatabase.runCommand(new Document("buildInfo", 1));
 			gui.setsourceDatabaseVersion((String) result.get("version"));
@@ -317,7 +323,7 @@ public class Main {
 				final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collectionName);
 
 				// disable is JSON constraint, remove indexes...
-				final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes, conf.collectionsProperties);
+				final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf, collectionName, AUTONOMOUS_DATABASE);
 
 				if (!oracleCollectionInfo.emptyDestinationCollection) {
 					LOGGER.warn("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -387,7 +393,7 @@ public class Main {
 					if (ORACLE_MAJOR_VERSION >= 23) {
 						String IDproperty = conf.collectionsProperties.getProperty(collectionName + ".ID", "EMBEDDED_OID");
 
-						if ("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
+						if (/*"STANDARD".equalsIgnoreCase(MAX_STRING_SIZE) &&*/ "EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
 							try (Connection c = pds.getConnection()) {
 								try (Statement s = c.createStatement()) {
 									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" drop column id");
@@ -432,10 +438,10 @@ public class Main {
 					if (ORACLE_MAJOR_VERSION >= 23) {
 						String IDproperty = conf.collectionsProperties.getProperty(collectionName + ".ID", "EMBEDDED_OID");
 
-						if ("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
+						if (/*"STANDARD".equalsIgnoreCase(MAX_STRING_SIZE) &&*/ "EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
 							try (Connection c = pds.getConnection()) {
 								try (Statement s = c.createStatement()) {
-									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" add id AS (JSON_VALUE(\"DATA\" FORMAT OSON , '$._id' RETURNING ANY ORA_RAWCOMPARE NO ARRAY ERROR ON ERROR)) MATERIALIZED  NOT NULL ENABLE");
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" add id AS (JSON_VALUE(\"DATA\" FORMAT OSON , '$._id' RETURNING ANY ORA_RAWCOMPARE NO ARRAY ERROR ON ERROR)) MATERIALIZED NOT NULL ENABLE");
 								}
 							}
 						}
@@ -443,7 +449,7 @@ public class Main {
 				}
 
 				// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
-				oracleCollectionInfo.finish(mediumPDS, mongoCollection, null, conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes, conf.buildSecondaryIndexes, ORACLE_MAJOR_VERSION);
+				oracleCollectionInfo.finish(mediumPDS, mongoCollection, null, conf, gui, ORACLE_MAJOR_VERSION);
 				//gui.finishCollection();
 
 				computeOracleObjectSize(pds, oracleCollectionInfo);
@@ -469,6 +475,24 @@ public class Main {
 			}
 			if (workerThreadPool != null) {
 				workerThreadPool.shutdown();
+			}
+		}
+	}
+
+	private static void grantPrivilegesToDestinationUser(Configuration conf, PoolDataSource adminPDS) throws SQLException {
+		try (Connection c = adminPDS.getConnection()) {
+			try (Statement s = c.createStatement()) {
+				s.execute("grant execute on CTX_DDL to " + conf.destinationUsername.toUpperCase());
+			}
+			catch (SQLException ignored) {
+				LOGGER.warn("Unable to grant execute on CTX_DDL!");
+			}
+
+			try (Statement s = c.createStatement()) {
+				s.execute("grant create job to " + conf.destinationUsername.toUpperCase());
+			}
+			catch (SQLException ignored) {
+				LOGGER.warn("Unable to grant create job!");
 			}
 		}
 	}
@@ -519,7 +543,7 @@ public class Main {
 				REPORT.addCollection(collectionName, conf.samples != -1);
 
 				// disable is JSON constraint, remove indexes...
-				final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf.destinationUsername.toUpperCase(), collectionName, conf.dropAlreadyExistingCollection, AUTONOMOUS_DATABASE, conf.mongodbAPICompatible, conf.forceOSON, conf.buildSecondaryIndexes, conf.collectionsProperties);
+				final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf, collectionName, AUTONOMOUS_DATABASE);
 
 				if (!oracleCollectionInfo.emptyDestinationCollection) {
 					LOGGER.warn("Collection " + collectionName + " will not be migrated because destination is not empty!");
@@ -534,7 +558,7 @@ public class Main {
 				}
 
 				// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
-				oracleCollectionInfo.finish(mediumPDS, null, mongoDatabase.getCollectionMetadata(collectionName), conf.maxSQLParallelDegree, gui, conf.mongodbAPICompatible, conf.skipSecondaryIndexes, conf.buildSecondaryIndexes, ORACLE_MAJOR_VERSION);
+				oracleCollectionInfo.finish(mediumPDS, null, mongoDatabase.getCollectionMetadata(collectionName), conf, gui, ORACLE_MAJOR_VERSION);
 				//gui.finishCollection();
 
 				computeOracleObjectSize(pds, oracleCollectionInfo);
@@ -566,14 +590,68 @@ public class Main {
 
 	private static void computeOracleObjectSize(PoolDataSource pds, OracleCollectionInfo oracleCollectionInfo) {
 		try(Connection c = pds.getConnection()) {
+			String lobSegmentName = null;
+			String lobIndexName = null;
+			try(PreparedStatement p = c.prepareStatement("select segment_name, index_name from USER_LOBS where table_name=?")) {
+				p.setString(1,oracleCollectionInfo.getTableName());
+				try(ResultSet r = p.executeQuery()) {
+					if(r.next()) {
+						lobSegmentName = r.getString(1);
+						lobIndexName = r.getString(2);
+					}
+				}
+			}
+
+			long tableSize = 0;
+
 			try(PreparedStatement p = c.prepareStatement("select sum(bytes) from user_segments where segment_name=?")) {
 				p.setString(1,oracleCollectionInfo.getTableName());
 				try(ResultSet r = p.executeQuery()) {
 					if(r.next()) {
-						REPORT.getCollection(oracleCollectionInfo.getCollectionName()).tableSize = r.getLong(1);
+						tableSize = r.getLong(1);
+					}
+				}
+
+				if(lobSegmentName != null) {
+					p.setString(1,lobSegmentName);
+					try(ResultSet r = p.executeQuery()) {
+						if(r.next()) {
+							tableSize += r.getLong(1);
+						}
+					}
+				}
+
+				if(lobIndexName != null) {
+					p.setString(1,lobIndexName);
+					try(ResultSet r = p.executeQuery()) {
+						if(r.next()) {
+							tableSize += r.getLong(1);
+						}
+					}
+				}
+
+				for(IndexReport ir : REPORT.getCollection(oracleCollectionInfo.getCollectionName()).indexes) {
+					p.setString(1,ir.name);
+					try(ResultSet r = p.executeQuery()) {
+						if(r.next()) {
+							ir.indexSize = r.getLong(1);
+						}
+					}
+
+					if(ir.materializedViewName != null) {
+						p.setString(1,ir.materializedViewName.toUpperCase());
+						try(ResultSet r = p.executeQuery()) {
+							if(r.next()) {
+								ir.materializedViewSize = r.getLong(1);
+							}
+						}
 					}
 				}
 			}
+
+			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).tableSize = tableSize;
+
+
 		}
 		catch(SQLException sqle) {
 			LOGGER.error("While retrieving objects size in Oracle for "+oracleCollectionInfo.getCollectionName(),sqle);
@@ -612,10 +690,10 @@ public class Main {
 						buffer.put(data);
 					} else {
 						// overflow
-						final int position = buffer.position();
+						final int bufferPosition = buffer.position();
 						buffer.rewind();
-						final ByteBuffer bufferToWorkOn = ByteBuffer.allocateDirect(position);
-						bufferToWorkOn.put(0,buffer,0,position).rewind();
+						final ByteBuffer bufferToWorkOn = ByteBuffer.allocateDirect(bufferPosition);
+						bufferToWorkOn.put(0,buffer,0,bufferPosition).rewind();
 
 						count += (--clusterCount);
 
@@ -664,10 +742,10 @@ public class Main {
 //				publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (position - clusterStartPosition)));
 				//LOGGER.info("- adding cluster of "+clusterCount+" JSON document(s).");
 
-				final int position = buffer.position();
+				final int bufferPosition = buffer.position();
 				buffer.rewind();
-				final ByteBuffer bufferToWorkOn = ByteBuffer.allocateDirect(position);
-				bufferToWorkOn.put(0,buffer,0,position).rewind();
+				final ByteBuffer bufferToWorkOn = ByteBuffer.allocateDirect(bufferPosition);
+				bufferToWorkOn.put(0,buffer,0,bufferPosition).rewind();
 
 				final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
 				publishingCfsConvert.add(pCf);
@@ -807,7 +885,7 @@ public class Main {
 		if (ORACLE_MAJOR_VERSION >= 23) {
 			String IDproperty = conf.collectionsProperties.getProperty(collectionName + ".ID", "EMBEDDED_OID");
 
-			if ("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
+			if (/*"STANDARD".equalsIgnoreCase(MAX_STRING_SIZE) &&*/ "EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
 				try (Connection c = pds.getConnection()) {
 					try (Statement s = c.createStatement()) {
 						s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" drop column id");
@@ -827,11 +905,11 @@ public class Main {
 		if (ORACLE_MAJOR_VERSION >= 23) {
 			String IDproperty = conf.collectionsProperties.getProperty(collectionName + ".ID", "EMBEDDED_OID");
 
-			if ("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
+			if (/*"STANDARD".equalsIgnoreCase(MAX_STRING_SIZE) &&*/ "EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
 				LOGGER.info("Now recreating ID column...");
 				try (Connection c = pds.getConnection()) {
 					try (Statement s = c.createStatement()) {
-						s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" add id AS (JSON_VALUE(\"DATA\" FORMAT OSON , '$._id' RETURNING ANY ORA_RAWCOMPARE NO ARRAY ERROR ON ERROR)) MATERIALIZED  NOT NULL ENABLE");
+						s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" add id AS (JSON_VALUE(\"DATA\" FORMAT OSON , '$._id' RETURNING ANY ORA_RAWCOMPARE NO ARRAY ERROR ON ERROR)) MATERIALIZED NOT NULL ENABLE");
 					}
 				}
 				LOGGER.info("ID column recreation OK");
@@ -844,6 +922,13 @@ public class Main {
 			ORACLE_MAJOR_VERSION = c.getMetaData().getDatabaseMajorVersion();
 
 			try (Statement s = c.createStatement()) {
+				try(ResultSet r = s.executeQuery("select value from v$parameter where name='max_string_size'")) {
+					if(r.next()) {
+						MAX_STRING_SIZE = r.getString(1);
+						LOGGER.info("max_string_size="+MAX_STRING_SIZE);
+					}
+				}
+
 				try (ResultSet r = s.executeQuery("select version_full, count(*) from gv$instance group by version_full")) {
 					if (r.next()) {
 						final String oracleVersion = r.getString(1);

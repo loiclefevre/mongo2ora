@@ -5,6 +5,7 @@ import com.mongodb.client.MongoCursor;
 import com.mongodb.diagnostics.logging.Logger;
 import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
+import com.oracle.mongo2ora.migration.Configuration;
 import com.oracle.mongo2ora.migration.mongodb.IndexColumn;
 import com.oracle.mongo2ora.migration.mongodb.MetadataIndex;
 import com.oracle.mongo2ora.migration.mongodb.MetadataKey;
@@ -94,26 +95,18 @@ public class OracleCollectionInfo {
 		}
 	}
 
-	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, String user, String collectionName, boolean dropAlreadyExistingCollection,
-																	 boolean autonomousDatabase, boolean mongoDBAPICompatible, boolean forceOSON,
-																	 boolean buildSecondaryIndexes, Properties collectionsProperties) throws SQLException, OracleException {
+	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, Configuration conf, String collectionName, boolean autonomousDatabase)
+			throws SQLException, OracleException {
+		final String user = conf.destinationUsername.toUpperCase();
+		final boolean dropAlreadyExistingCollection = conf.dropAlreadyExistingCollection;
+		final boolean mongoDBAPICompatible = conf.mongodbAPICompatible;
+		final boolean forceOSON = conf.forceOSON;
+		final boolean buildSecondaryIndexes = conf.buildSecondaryIndexes;
+		final Properties collectionsProperties = conf.collectionsProperties;
+
 		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName, autonomousDatabase);
 
 		try (Connection c = adminPDS.getConnection()) {
-			try (Statement s = c.createStatement()) {
-				s.execute("grant execute on CTX_DDL to " + user);
-			}
-			catch (SQLException ignored) {
-				LOGGER.warn("Unable to grant execute on CTX_DDL!");
-			}
-
-			try (Statement s = c.createStatement()) {
-				s.execute("grant create job to " + user);
-			}
-			catch (SQLException ignored) {
-				LOGGER.warn("Unable to grant create job!");
-			}
-
 			try (Connection userConnection = pds.getConnection()) {
 				// SODA: ensure the collection do exists!
 				final Properties props = new Properties();
@@ -432,7 +425,12 @@ public class OracleCollectionInfo {
 	 * @param skipSecondaryIndexes
 	 * @throws SQLException
 	 */
-	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, MongoDBMetadata collectionMetadataDump, int maxParallelDegree, ASCIIGUI gui, boolean mongoDBAPICompatible, boolean skipSecondaryIndexes, boolean buildSecondaryIndexes, int oracleVersion) throws SQLException, OracleException {
+	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, MongoDBMetadata collectionMetadataDump, Configuration conf, ASCIIGUI gui, int oracleVersion) throws SQLException, OracleException {
+		final int maxParallelDegree = conf.maxSQLParallelDegree;
+		final boolean mongoDBAPICompatible = conf.mongodbAPICompatible;
+		final boolean skipSecondaryIndexes = conf.skipSecondaryIndexes;
+		final boolean buildSecondaryIndexes = conf.buildSecondaryIndexes;
+
 		try (Connection c = mediumPDS.getConnection()) {
 			try (Statement s = c.createStatement()) {
 				if (!buildSecondaryIndexes) {
@@ -656,7 +654,7 @@ public class OracleCollectionInfo {
 						mongoDBIndex++;
 					}
 
-					if (mongoDBIndex > 0) {
+					if (mongoDBIndex > 0 && !conf.buildIndexesLikeMiguel) {
 						final Properties props = new Properties();
 						props.put("oracle.soda.sharedMetadataCache", "true");
 						props.put("oracle.soda.localMetadataCache", "true");
@@ -817,6 +815,9 @@ public class OracleCollectionInfo {
 
 						s.execute("ALTER SESSION DISABLE PARALLEL DDL");
 						LOGGER.info("OK");
+					}
+					else if (mongoDBIndex > 0 && conf.buildIndexesLikeMiguel) {
+						MiguelIndexes.build(this,c,conf,collectionMetadataDump.getIndexes(), oracleVersion, gui);
 					}
 				}
 			}
@@ -1118,9 +1119,36 @@ public class OracleCollectionInfo {
 		public String type;
 		public int length;
 
+		public FieldInfo() {
+		}
+
 		public FieldInfo(String path, String type, int length) {
 			this.path = path;
 			this.type = type;
+			this.length = length;
+		}
+
+		public String getPath() {
+			return path;
+		}
+
+		public void setPath(String path) {
+			this.path = path;
+		}
+
+		public String getType() {
+			return type;
+		}
+
+		public void setType(String type) {
+			this.type = type;
+		}
+
+		public int getLength() {
+			return length;
+		}
+
+		public void setLength(int length) {
 			this.length = length;
 		}
 	}
