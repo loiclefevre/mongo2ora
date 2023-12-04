@@ -23,10 +23,14 @@ import com.oracle.mongo2ora.migration.oracle.OracleCollectionInfo;
 import com.oracle.mongo2ora.reporting.IndexReport;
 import com.oracle.mongo2ora.reporting.LoadingReport;
 import com.oracle.mongo2ora.util.Kernel32;
+import com.oracle.mongo2ora.util.Tools;
 import com.oracle.mongo2ora.util.XYTerminalOutput;
 import net.rubygrapefruit.platform.Native;
 import net.rubygrapefruit.platform.terminal.Terminals;
+import oracle.jdbc.driver.json.binary.OsonGeneratorImpl;
 import oracle.jdbc.internal.OracleConnection;
+import oracle.sql.json.OracleJsonFactory;
+import oracle.sql.json.OracleJsonGenerator;
 import oracle.ucp.jdbc.PoolDataSource;
 import oracle.ucp.jdbc.PoolDataSourceFactory;
 import org.bson.BsonDocument;
@@ -34,6 +38,7 @@ import org.bson.BsonInt32;
 import org.bson.Document;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
@@ -63,6 +68,7 @@ import static com.mongodb.client.model.Projections.include;
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
 import static com.oracle.mongo2ora.util.XYTerminalOutput.*;
 import static java.util.stream.Collectors.toList;
+import static org.bson.MyBSON2OSONWriter.KEYS_SIZE;
 
 /**
  * TODO:
@@ -183,7 +189,7 @@ public class Main {
 		return bsonSize;
 	}
 
-	private static void initialize(Configuration conf) {
+	private static void initialize() {
 		LOGGER.info("===========================================================================================================");
 		LOGGER.info("mongo2ora v" + VERSION + " started!");
 		Security.setProperty("networkaddress.cache.ttl", "0"); // For Autonomous Database CMAN load balancing
@@ -200,7 +206,9 @@ public class Main {
 		}
 
 		TERM = new XYTerminalOutput(TERMINALS.getTerminal(Terminals.Output.Stdout));
+	}
 
+	private static void postInitialize(Configuration conf) {
 		gui = new ASCIIGUI(TERM, "--== " +
 				BOLD + BrightGreen + "Mongo" +
 				BrightYellow + "2" +
@@ -220,14 +228,31 @@ public class Main {
 		workerThreadPool = counterThreadPool;
 	}
 
+	private static void displayOSONSettings(Configuration conf) {
+		LOGGER.info("OSON settings:");
+		LOGGER.info("- allow duplicate keys: "+conf.allowDuplicateKeys);
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		OracleJsonFactory factory = new OracleJsonFactory();
+		OracleJsonGenerator gen = factory.createJsonBinaryGenerator(out);
+		OsonGeneratorImpl _gen = (OsonGeneratorImpl)gen;
+		LOGGER.info("- simple value sharing: "+_gen.getSimpleValuesharing());
+		LOGGER.info("- last value sharing: "+_gen.getLastValueSharing());
+		LOGGER.info("- relative offset: "+_gen.getRelativeOffsets());
+		LOGGER.info("- tiny node mode: "+true);
+	}
+
 	public static final LoadingReport REPORT = new LoadingReport();
 
 	public static void main(final String[] args) {
 		try {
+			initialize();
+
 			// Create configuration related to command line args
 			final Configuration conf = Configuration.prepareConfiguration(args);
 
-			initialize(conf);
+			postInitialize(conf);
+
+			displayOSONSettings(conf);
 
 			if (conf.sourceDump) {
 				REPORT.source = "MongoDB dump";
@@ -453,6 +478,8 @@ public class Main {
 				//gui.finishCollection();
 
 				computeOracleObjectSize(pds, oracleCollectionInfo);
+
+				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).totalKeysSize = KEYS_SIZE.get();
 			}
 
 			gui.finishLastCollection();
@@ -562,6 +589,8 @@ public class Main {
 				//gui.finishCollection();
 
 				computeOracleObjectSize(pds, oracleCollectionInfo);
+
+				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).totalKeysSize = KEYS_SIZE.get();
 			}
 
 			gui.finishLastCollection();
@@ -889,6 +918,17 @@ public class Main {
 				try (Connection c = pds.getConnection()) {
 					try (Statement s = c.createStatement()) {
 						s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" drop column id");
+
+						/*
+						try( ResultSet r = s.executeQuery("select dbms_metadata.get_ddl('TABLE', '"+oracleCollectionInfo.getTableName()+"') from dual")) {
+							String tableDDl;
+							if(r.next()) {
+								tableDDl = r.getString(1);
+								s.execute("drop table \""+oracleCollectionInfo.getTableName()+"\" purge");
+								s.execute(tableDDl.replace("STORE AS (", "STORE AS ( CACHE COMPRESS HIGH "));
+							}
+						} */
+
 					}
 				}
 			}

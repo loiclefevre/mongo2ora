@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class MyBSON2OSONWriter implements BsonWriter {
 	private final OracleJsonFactory factory = getFactoryFromCache();
@@ -702,6 +703,11 @@ public class MyBSON2OSONWriter implements BsonWriter {
 		gen = factory.createJsonBinaryGenerator(out); // : factory.createJsonTextGenerator(out);
 		//if(gen instanceof OsonGeneratorImpl) {
 			((OsonGeneratorImpl) gen).setDuplicateKeyMode(allowDuplicateKeys ? OsonGeneratorImpl.DuplicateKeyMode.ALLOW : OsonGeneratorImpl.DuplicateKeyMode.DISALLOW);
+/*			((OsonGeneratorImpl) gen).setUseRelativeOffsets(true);
+			((OsonGeneratorImpl) gen).setLastValueSharing(true);
+			((OsonGeneratorImpl) gen).setSimpleValueSharing(true);
+			((OsonGeneratorImpl) gen).setTinyNodeStat(true);
+*/
 		//}
 		//gen = ogen.wrap(JsonGenerator.class);
 		state = State.INITIAL;
@@ -713,12 +719,21 @@ public class MyBSON2OSONWriter implements BsonWriter {
 		return context.getContextType() == BsonContextType.ARRAY ? State.VALUE : State.NAME;
 	}
 
+	public static AtomicLong KEYS_SIZE = new AtomicLong(0);
+
+	public long getKeysSize() {
+		return keysSize;
+	}
+
+	private long keysSize;
+
 	public void writeName(String name) {
 		if (state != State.NAME) {
 			throw new IllegalStateException("WriteName");
 		}
 
 		context.name = name;
+		keysSize += name.length();
 		state = State.VALUE;
 	}
 

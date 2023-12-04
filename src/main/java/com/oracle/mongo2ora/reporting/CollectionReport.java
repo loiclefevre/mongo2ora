@@ -20,6 +20,7 @@ public class CollectionReport {
 	public long totalBSONSize;
 	public long totalOSONSize;
 	public long tableSize;
+	public long totalKeysSize;
 
 	public CollectionReport(String collectionName, boolean sampling) {
 		this.collectionName = collectionName;

@@ -27,6 +27,7 @@ import java.util.concurrent.Semaphore;
 
 import static com.oracle.mongo2ora.Main.REPORT;
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
+import static org.bson.MyBSON2OSONWriter.KEYS_SIZE;
 
 public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 	private static final Logger LOGGER = Loggers.getLogger("converter");
@@ -200,6 +201,8 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 							p.flushData();
 
 							realConnection.commit(commitOptions);
+
+							KEYS_SIZE.getAndAdd( decoder.getKeysSize() );
 						}
 					}
 					else {
@@ -225,6 +228,8 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 							p.flushData();
 
 							realConnection.commit(commitOptions);
+
+							KEYS_SIZE.getAndAdd( decoder.getKeysSize() );
 						}
 					}
 

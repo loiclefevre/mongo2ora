@@ -36,6 +36,10 @@ public class MyBSONDecoder {
 		bsonLength = reader.getBsonInput().getPosition();
 	}
 
+	public long getKeysSize() {
+		return writer.getKeysSize();
+	}
+
 	public final byte[] getOSONData() {
 		return writer.getOSONBytes();
 	}

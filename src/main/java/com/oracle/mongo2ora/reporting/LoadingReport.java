@@ -38,7 +38,7 @@ public class LoadingReport {
 					 "Destination ................. %s\n" +
 					 "Number of collection(s) ..... %d\n" +
 					 "Number of index(es) ......... %d\n"
-				, source+(sourceDumpFolder.isEmpty()?"":" ("+sourceDumpFolder+")")
+				, source+(sourceDumpFolder != null && sourceDumpFolder.isEmpty()?"":" ("+sourceDumpFolder+")")
 				, oracleDatabaseType + " database v" + oracleVersion + (oracleInstanceNumber > 1 ? " (with " + oracleInstanceNumber + " RAC instances)" : "")
 				, numberOfCollections
 				, numberOfIndexes
@@ -53,9 +53,10 @@ public class LoadingReport {
 			r.append("  ").append(cr.collectionName).append('\n');
 			r.append("  - Document(s) loaded ...... ").append(cr.totalDocumentsLoaded).append(cr.sampling?" (sampling)":"").append('\n');
 			r.append("  - BSON size ............... ").append(Tools.getHumanReadableSize(cr.totalBSONSize)).append('\n');
-			r.append("  - OSON size ............... ").append(Tools.getHumanReadableSize(cr.totalOSONSize)).append('\n');
+			r.append("  - OSON size ............... ").append(Tools.getHumanReadableSize(cr.totalOSONSize)).append(" (ratio vs BSON: ").append(String.format("%.1f%%", 100d * ((double)cr.totalOSONSize / (double)cr.totalBSONSize))).append(")\n");
+			r.append("  - JSON keys size .......... ").append(Tools.getHumanReadableSize(cr.totalKeysSize)).append(" (ratio vs BSON: ").append(String.format("%.1f%%", 100d * ((double)cr.totalKeysSize / (double)cr.totalBSONSize))).append(")\n");
 			r.append("  - Table name .............. ").append(cr.tableName).append('\n');
-			r.append("  - Table size .............. ").append(Tools.getHumanReadableSize(cr.tableSize)).append('\n');
+			r.append("  - Table size .............. ").append(Tools.getHumanReadableSize(cr.tableSize)).append(" (ratio vs BSON: ").append(String.format("%.1f%%", 100d * ((double)cr.tableSize / (double)cr.totalBSONSize))).append(")\n");
 			if(cr.wasDropped) r.append("  - Was dropped ............. Yes\n");
 			r.append("  - MongoDB API compatible .. ").append(cr.mongoDBAPICompatible?"Yes":"No").append('\n');
 			r.append("  - Created index(es) ....... ").append(cr.indexes.size()).append('\n');
