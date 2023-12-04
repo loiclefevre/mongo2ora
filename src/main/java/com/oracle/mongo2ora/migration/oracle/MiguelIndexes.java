@@ -123,7 +123,8 @@ public class MiguelIndexes {
 					if (rightMaxStringSizeForMVBasedIndex && noParallelArrays && allFieldTypesKnown && noMultiTypeField && noObjectTypeField && noOrphanArrayTypeField) {
 						if (mi.isTtl()) {
 							// TODO
-							LOGGER.info("Create TTL index ...");
+							//LOGGER.info("Create TTL index ...");
+							LOGGER.warn("/!\\ TTL index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + ", this feature is coming soon in mongo2ora..");
 						}
 						else if (isMaterializedViewBasedIndex) {
 							LOGGER.info("Create materialized view based index ...");
@@ -192,7 +193,7 @@ public class MiguelIndexes {
 			fields++;
 		}
 
-		s.append(")").append(" PARALLEL").append(conf.maxSQLParallelDegree == -1 ? "" : " " + conf.maxSQLParallelDegree);
+		s.append(")").append(" PARALLEL").append(conf.maxSQLParallelDegree == -1 ? "" : " " + conf.maxSQLParallelDegree).append(" compute statistics");
 
 		LOGGER.info(s.toString());
 
@@ -265,8 +266,6 @@ public class MiguelIndexes {
 				stmt.execute("drop materialized view "+"mv4qrw_"+oracleCollectionInfo.getTableName()+"$"+mi.getName());
 			}catch(SQLException ignored) {}
 			stmt.execute(s.toString());
-
-			// TODO disable parallel index?
 
 			return true;
 		}
@@ -357,7 +356,7 @@ public class MiguelIndexes {
 			fields++;
 		}
 
-		s.append(", 1)").append(" PARALLEL").append(conf.maxSQLParallelDegree == -1 ? "" : " " + conf.maxSQLParallelDegree);
+		s.append(", 1)").append(" PARALLEL").append(conf.maxSQLParallelDegree == -1 ? "" : " " + conf.maxSQLParallelDegree).append(" compute statistics");
 
 		LOGGER.info(s.toString());
 
