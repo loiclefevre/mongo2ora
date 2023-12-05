@@ -693,20 +693,21 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	}
 
 	public void reset() {
-		reset(false);
+		reset(false,false,false,false);
 	}
 
-	public void reset(boolean allowDuplicateKeys) {
+	public void reset(boolean allowDuplicateKeys, boolean relativeOffsets, boolean lastValueSharing, boolean simpleValueSharing) {
 		// reset OSON generation
 		oid = null;
 		out.reset();
 		gen = factory.createJsonBinaryGenerator(out); // : factory.createJsonTextGenerator(out);
 		//if(gen instanceof OsonGeneratorImpl) {
-			((OsonGeneratorImpl) gen).setDuplicateKeyMode(allowDuplicateKeys ? OsonGeneratorImpl.DuplicateKeyMode.ALLOW : OsonGeneratorImpl.DuplicateKeyMode.DISALLOW);
-/*			((OsonGeneratorImpl) gen).setUseRelativeOffsets(true);
-			((OsonGeneratorImpl) gen).setLastValueSharing(true);
-			((OsonGeneratorImpl) gen).setSimpleValueSharing(true);
-			((OsonGeneratorImpl) gen).setTinyNodeStat(true);
+		final OsonGeneratorImpl _gen = (OsonGeneratorImpl) gen;
+		_gen.setDuplicateKeyMode(allowDuplicateKeys ? OsonGeneratorImpl.DuplicateKeyMode.ALLOW : OsonGeneratorImpl.DuplicateKeyMode.DISALLOW);
+		_gen.setUseRelativeOffsets(relativeOffsets);
+		_gen.setLastValueSharing(lastValueSharing);
+		_gen.setSimpleValueSharing(simpleValueSharing);
+/*			((OsonGeneratorImpl) gen).setTinyNodeStat(true);
 */
 		//}
 		//gen = ogen.wrap(JsonGenerator.class);

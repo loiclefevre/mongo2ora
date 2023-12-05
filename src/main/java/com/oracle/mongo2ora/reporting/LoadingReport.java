@@ -57,6 +57,9 @@ public class LoadingReport {
 			r.append("  - JSON keys size .......... ").append(Tools.getHumanReadableSize(cr.totalKeysSize)).append(" (ratio vs BSON: ").append(String.format("%.1f%%", 100d * ((double)cr.totalKeysSize / (double)cr.totalBSONSize))).append(")\n");
 			r.append("  - Table name .............. ").append(cr.tableName).append('\n');
 			r.append("  - Table size .............. ").append(Tools.getHumanReadableSize(cr.tableSize)).append(" (ratio vs BSON: ").append(String.format("%.1f%%", 100d * ((double)cr.tableSize / (double)cr.totalBSONSize))).append(")\n");
+			if(cr.compressionLevel > 0) {
+				r.append("    - Compression level ..... ").append(cr.compressionLevel).append('\n');
+			}
 			if(cr.wasDropped) r.append("  - Was dropped ............. Yes\n");
 			r.append("  - MongoDB API compatible .. ").append(cr.mongoDBAPICompatible?"Yes":"No").append('\n');
 			r.append("  - Created index(es) ....... ").append(cr.indexes.size()).append('\n');
@@ -73,7 +76,7 @@ public class LoadingReport {
 				r.append("    - Size .................. ").append(Tools.getHumanReadableSize(ir.indexSize)).append('\n');
 				if(ir.type == IndexType.COMPOUND_MV || ir.type == IndexType.SIMPLE_MV) {
 					r.append("    - Materialized View ..... ").append(ir.materializedViewName).append('\n');
-					r.append("        - MV Size ........... ").append(Tools.getHumanReadableSize(ir.materializedViewSize)).append('\n');
+					r.append("      - Size ................ ").append(Tools.getHumanReadableSize(ir.materializedViewSize)).append('\n');
 				}
 
 

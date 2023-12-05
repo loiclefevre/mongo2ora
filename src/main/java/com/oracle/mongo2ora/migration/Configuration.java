@@ -56,12 +56,17 @@ public class Configuration {
 	public long samples = -1;
 
 	public boolean allowDuplicateKeys;
+	public boolean relativeOffsets;
+	public boolean lastValueSharing;
+	public boolean simpleValueSharing;
 
 	public final  Properties collectionsProperties = new Properties();
 
 	public long dumpBufferSize = 128;
 	public boolean buildIndexesLikeMiguel;
 	public boolean compressedOSON;
+	public int compressionLevel = 0;
+	public boolean acoEnabled;
 
 	public static Configuration prepareConfiguration(String[] args) {
 		Configuration conf = new Configuration();
@@ -69,11 +74,38 @@ public class Configuration {
 		for (int i = 0; i < args.length; i++) {
 			final String arg = args[i];
 			switch (arg.toLowerCase()) {
+				case "--enable-advanced-compression":
+					conf.acoEnabled = true;
+					break;
+
 				case "--miguel-indexes":
 					conf.buildIndexesLikeMiguel = true;
 				break;
 
-				case "--compressed-json":
+				case "--compress":
+					if (i + 1 < args.length) {
+						conf.compressionLevel = Integer.parseInt(args[++i]);
+						if(conf.compressionLevel < 0) {
+							conf.compressionLevel = 0;
+						} else
+						if(conf.compressionLevel > 3) {
+							conf.compressionLevel = 3;
+						}
+
+						switch(conf.compressionLevel) {
+							case 1:
+								conf.relativeOffsets = true;
+								conf.simpleValueSharing = true;
+								break;
+
+							case 2:
+							case 3:
+								conf.relativeOffsets = true;
+								conf.simpleValueSharing = true;
+								conf.lastValueSharing = true;
+								break;
+						}
+					}
 					conf.compressedOSON = true;
 				break;
 

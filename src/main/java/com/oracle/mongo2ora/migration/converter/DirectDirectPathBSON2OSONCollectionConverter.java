@@ -14,8 +14,6 @@ import oracle.jdbc.driver.DPRowBinder2;
 import oracle.jdbc.internal.OracleConnection;
 import oracle.json.util.HashFuncs;
 import oracle.ucp.jdbc.PoolDataSource;
-import org.bson.BsonDocument;
-import org.bson.BsonInvalidOperationException;
 import org.bson.MyBSONDecoder;
 import org.bson.RawBsonDocument;
 
@@ -49,8 +47,11 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 	private final int oracleDBVersion;
 	private final Properties collectionsProperties;
 	private final boolean allowDuplicateKeys;
+	private final boolean relativeOffsets;
+	private final boolean lastValueSharing;
+	private final boolean simpleValueSharing;
 
-	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible, int oracleDBVersion, Properties collectionsProperties, boolean allowDuplicateKeys, Semaphore GUNZIP_SEMAPHORE) {
+	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible, int oracleDBVersion, Properties collectionsProperties, boolean allowDuplicateKeys, Semaphore GUNZIP_SEMAPHORE, boolean relativeOffsets, boolean lastValueSharing, boolean simpleValueSharing) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
 		this.tableName = tableName;
@@ -66,6 +67,9 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 		this.collectionsProperties = collectionsProperties;
 		this.allowDuplicateKeys = allowDuplicateKeys;
 		this.GUNZIP_SEMAPHORE = GUNZIP_SEMAPHORE;
+		this.relativeOffsets =relativeOffsets;
+		this.lastValueSharing=lastValueSharing;
+		this.simpleValueSharing=simpleValueSharing;
 	}
 
 	@Override
@@ -126,7 +130,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 						try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), "\"" + tableName + "\"", null,
 								"EMBEDDED_OID".equalsIgnoreCase(IDproperty) ?
 								new String[]{"VERSION", "DATA"} : new String[]{"ID", "VERSION", "DATA"} /* String.format("p%d", partitionId),*/)) {
-							final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys);
+							final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
 
 							if("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
 								// ID column is filled using path expression from document content (usually $._id)
@@ -207,7 +211,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 					}
 					else {
 						try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), "\"" + tableName + "\"", null, new String[]{"ID", "VERSION", "JSON_DOCUMENT"} /* String.format("p%d", partitionId),*/)) {
-							final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys);
+							final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
 
 							while (cursor.hasNext()) {
 								final RawBsonDocument doc = cursor.next();

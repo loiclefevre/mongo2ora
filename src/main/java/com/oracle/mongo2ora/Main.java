@@ -23,14 +23,10 @@ import com.oracle.mongo2ora.migration.oracle.OracleCollectionInfo;
 import com.oracle.mongo2ora.reporting.IndexReport;
 import com.oracle.mongo2ora.reporting.LoadingReport;
 import com.oracle.mongo2ora.util.Kernel32;
-import com.oracle.mongo2ora.util.Tools;
 import com.oracle.mongo2ora.util.XYTerminalOutput;
 import net.rubygrapefruit.platform.Native;
 import net.rubygrapefruit.platform.terminal.Terminals;
-import oracle.jdbc.driver.json.binary.OsonGeneratorImpl;
 import oracle.jdbc.internal.OracleConnection;
-import oracle.sql.json.OracleJsonFactory;
-import oracle.sql.json.OracleJsonGenerator;
 import oracle.ucp.jdbc.PoolDataSource;
 import oracle.ucp.jdbc.PoolDataSourceFactory;
 import org.bson.BsonDocument;
@@ -38,7 +34,6 @@ import org.bson.BsonInt32;
 import org.bson.Document;
 
 import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
@@ -104,11 +99,11 @@ import static org.bson.MyBSON2OSONWriter.KEYS_SIZE;
  * <p>
  * OK display index creation
  * OK work on Autonomous database detection and adapt with OSON support
- * - work on Autonomous database detection and adapt with JSON datatype native support
+ * OK work on Autonomous database detection and adapt with JSON datatype native support
  * - help migration using properties file for per collection configuration (range partitioning, SODA collection columns, types etc..., filtering...)
  */
 public class Main {
-	public static final String VERSION = "1.3.0";
+	public static final String VERSION = "1.3.1";
 
 	private static final Logger LOGGER = Loggers.getLogger("main");
 
@@ -226,19 +221,31 @@ public class Main {
 		counterThreadPool = Executors.newVirtualThreadPerTaskExecutor();
 		LOGGER.info("WORKER THREADS=" + conf.cores);
 		workerThreadPool = counterThreadPool;
+
+		if (conf.compressionLevel > 0) {
+			if (conf.acoEnabled) {
+				LOGGER.info("Compression level: " + conf.compressionLevel);
+			} else {
+				LOGGER.error("Compression requested while Advanced Compression Option not explicitely enabled!");
+				Configuration.displayUsage("Compression requested while Advanced Compression Option not explicitely enabled!");
+			}
+		}
 	}
 
 	private static void displayOSONSettings(Configuration conf) {
 		LOGGER.info("OSON settings:");
-		LOGGER.info("- allow duplicate keys: "+conf.allowDuplicateKeys);
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		OracleJsonFactory factory = new OracleJsonFactory();
-		OracleJsonGenerator gen = factory.createJsonBinaryGenerator(out);
-		OsonGeneratorImpl _gen = (OsonGeneratorImpl)gen;
-		LOGGER.info("- simple value sharing: "+_gen.getSimpleValuesharing());
-		LOGGER.info("- last value sharing: "+_gen.getLastValueSharing());
-		LOGGER.info("- relative offset: "+_gen.getRelativeOffsets());
-		LOGGER.info("- tiny node mode: "+true);
+		LOGGER.info("- allow duplicate keys: " + conf.allowDuplicateKeys);
+		LOGGER.info("- compression level: " + conf.compressionLevel);
+
+		if (ORACLE_MAJOR_VERSION < 23) {
+			conf.relativeOffsets = false;
+		}
+
+		LOGGER.info("  - relative offset: " + conf.relativeOffsets);
+		LOGGER.info("  - simple value sharing: " + conf.simpleValueSharing);
+		LOGGER.info("  - last value sharing: " + conf.lastValueSharing);
+
+		//LOGGER.info("- tiny node mode: "+true);
 	}
 
 	public static final LoadingReport REPORT = new LoadingReport();
@@ -251,8 +258,6 @@ public class Main {
 			final Configuration conf = Configuration.prepareConfiguration(args);
 
 			postInitialize(conf);
-
-			displayOSONSettings(conf);
 
 			if (conf.sourceDump) {
 				REPORT.source = "MongoDB dump";
@@ -298,6 +303,8 @@ public class Main {
 
 			// Get destination database information
 			displayOracleDatabaseVersion(adminPDS);
+
+			displayOSONSettings(conf);
 
 			// Grant create job and CTX_DDL for managing Search indexes...
 			grantPrivilegesToDestinationUser(conf, adminPDS);
@@ -427,6 +434,9 @@ public class Main {
 						}
 					}
 
+					// COMPRESSION
+					manageTableCompression(conf, pds, oracleCollectionInfo);
+
 					for (CompletableFuture<CollectionCluster> publishingCf : publishingCfs) {
 						CollectionCluster cc = publishingCf.join();
 						clusters.add(cc);
@@ -439,7 +449,7 @@ public class Main {
 							publishingCfsConvert.add(pCf);
 
 							workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-									new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null) :
+									new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing) :
 									new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 
 							i++;
@@ -477,7 +487,7 @@ public class Main {
 				oracleCollectionInfo.finish(mediumPDS, mongoCollection, null, conf, gui, ORACLE_MAJOR_VERSION);
 				//gui.finishCollection();
 
-				computeOracleObjectSize(pds, oracleCollectionInfo);
+				computeOracleObjectSize(pds, oracleCollectionInfo, conf);
 
 				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).totalKeysSize = KEYS_SIZE.get();
 			}
@@ -536,6 +546,8 @@ public class Main {
 			// Get destination database information
 			displayOracleDatabaseVersion(adminPDS);
 
+			displayOSONSettings(conf);
+
 			// get number of collections and indexes in this database
 			MONGODB_COLLECTIONS = MONGODB_INDEXES = 0;
 			MongoDatabaseDump mongoDatabase = new MongoDatabaseDump(conf.sourceDumpFolder);
@@ -588,7 +600,7 @@ public class Main {
 				oracleCollectionInfo.finish(mediumPDS, null, mongoDatabase.getCollectionMetadata(collectionName), conf, gui, ORACLE_MAJOR_VERSION);
 				//gui.finishCollection();
 
-				computeOracleObjectSize(pds, oracleCollectionInfo);
+				computeOracleObjectSize(pds, oracleCollectionInfo, conf);
 
 				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).totalKeysSize = KEYS_SIZE.get();
 			}
@@ -617,14 +629,14 @@ public class Main {
 		}
 	}
 
-	private static void computeOracleObjectSize(PoolDataSource pds, OracleCollectionInfo oracleCollectionInfo) {
-		try(Connection c = pds.getConnection()) {
+	private static void computeOracleObjectSize(PoolDataSource pds, OracleCollectionInfo oracleCollectionInfo, Configuration conf) {
+		try (Connection c = pds.getConnection()) {
 			String lobSegmentName = null;
 			String lobIndexName = null;
-			try(PreparedStatement p = c.prepareStatement("select segment_name, index_name from USER_LOBS where table_name=?")) {
-				p.setString(1,oracleCollectionInfo.getTableName());
-				try(ResultSet r = p.executeQuery()) {
-					if(r.next()) {
+			try (PreparedStatement p = c.prepareStatement("select segment_name, index_name from USER_LOBS where table_name=?")) {
+				p.setString(1, oracleCollectionInfo.getTableName());
+				try (ResultSet r = p.executeQuery()) {
+					if (r.next()) {
 						lobSegmentName = r.getString(1);
 						lobIndexName = r.getString(2);
 					}
@@ -633,44 +645,44 @@ public class Main {
 
 			long tableSize = 0;
 
-			try(PreparedStatement p = c.prepareStatement("select sum(bytes) from user_segments where segment_name=?")) {
-				p.setString(1,oracleCollectionInfo.getTableName());
-				try(ResultSet r = p.executeQuery()) {
-					if(r.next()) {
+			try (PreparedStatement p = c.prepareStatement("select sum(bytes) from user_segments where segment_name=?")) {
+				p.setString(1, oracleCollectionInfo.getTableName());
+				try (ResultSet r = p.executeQuery()) {
+					if (r.next()) {
 						tableSize = r.getLong(1);
 					}
 				}
 
-				if(lobSegmentName != null) {
-					p.setString(1,lobSegmentName);
-					try(ResultSet r = p.executeQuery()) {
-						if(r.next()) {
+				if (lobSegmentName != null) {
+					p.setString(1, lobSegmentName);
+					try (ResultSet r = p.executeQuery()) {
+						if (r.next()) {
 							tableSize += r.getLong(1);
 						}
 					}
 				}
 
-				if(lobIndexName != null) {
-					p.setString(1,lobIndexName);
-					try(ResultSet r = p.executeQuery()) {
-						if(r.next()) {
+				if (lobIndexName != null) {
+					p.setString(1, lobIndexName);
+					try (ResultSet r = p.executeQuery()) {
+						if (r.next()) {
 							tableSize += r.getLong(1);
 						}
 					}
 				}
 
-				for(IndexReport ir : REPORT.getCollection(oracleCollectionInfo.getCollectionName()).indexes) {
-					p.setString(1,ir.name);
-					try(ResultSet r = p.executeQuery()) {
-						if(r.next()) {
+				for (IndexReport ir : REPORT.getCollection(oracleCollectionInfo.getCollectionName()).indexes) {
+					p.setString(1, ir.name);
+					try (ResultSet r = p.executeQuery()) {
+						if (r.next()) {
 							ir.indexSize = r.getLong(1);
 						}
 					}
 
-					if(ir.materializedViewName != null) {
-						p.setString(1,ir.materializedViewName.toUpperCase());
-						try(ResultSet r = p.executeQuery()) {
-							if(r.next()) {
+					if (ir.materializedViewName != null) {
+						p.setString(1, ir.materializedViewName.toUpperCase());
+						try (ResultSet r = p.executeQuery()) {
+							if (r.next()) {
 								ir.materializedViewSize = r.getLong(1);
 							}
 						}
@@ -679,11 +691,11 @@ public class Main {
 			}
 
 			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).tableSize = tableSize;
-
+			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).compressionLevel = conf.compressionLevel;
 
 		}
-		catch(SQLException sqle) {
-			LOGGER.error("While retrieving objects size in Oracle for "+oracleCollectionInfo.getCollectionName(),sqle);
+		catch (SQLException sqle) {
+			LOGGER.error("While retrieving objects size in Oracle for " + oracleCollectionInfo.getCollectionName(), sqle);
 		}
 	}
 
@@ -704,7 +716,7 @@ public class Main {
 			long totalCount = 0;
 
 			// read until end of gzipped stream
-			ByteBuffer buffer = ByteBuffer.allocateDirect((int)(conf.dumpBufferSize * 1024L * 1024L));
+			ByteBuffer buffer = ByteBuffer.allocateDirect((int) (conf.dumpBufferSize * 1024L * 1024L));
 
 			int i = 0;
 			while (true) {
@@ -714,15 +726,16 @@ public class Main {
 					clusterCount++;
 					totalCount++;
 
-					if(buffer.remaining() >= data.length) {
+					if (buffer.remaining() >= data.length) {
 						//LOGGER.info("Filling buffer...");
 						buffer.put(data);
-					} else {
+					}
+					else {
 						// overflow
 						final int bufferPosition = buffer.position();
 						buffer.rewind();
 						final ByteBuffer bufferToWorkOn = ByteBuffer.allocateDirect(bufferPosition);
-						bufferToWorkOn.put(0,buffer,0,bufferPosition).rewind();
+						bufferToWorkOn.put(0, buffer, 0, bufferPosition).rewind();
 
 						count += (--clusterCount);
 
@@ -733,13 +746,13 @@ public class Main {
 						try {
 							GUNZIP_SEMAPHORE.acquire();
 						}
-						catch(InterruptedException e) {
+						catch (InterruptedException e) {
 							throw new RuntimeException(e);
 						}
 
 						workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-						new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, GUNZIP_SEMAPHORE) :
-						new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
+								new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, GUNZIP_SEMAPHORE, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing) :
+								new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 
 						i++;
 						// publishingCfs.add(new CollectionCluster(clusterCount, clusterStartPosition, (int) (previousPosition - clusterStartPosition)));
@@ -754,9 +767,9 @@ public class Main {
 						clusterStartPosition = previousPosition;
 					}
 
-							if (conf.samples != -1 && totalCount >= conf.samples) {
-								break;
-							}
+					if (conf.samples != -1 && totalCount >= conf.samples) {
+						break;
+					}
 //						}
 //					}
 				}
@@ -774,14 +787,14 @@ public class Main {
 				final int bufferPosition = buffer.position();
 				buffer.rewind();
 				final ByteBuffer bufferToWorkOn = ByteBuffer.allocateDirect(bufferPosition);
-				bufferToWorkOn.put(0,buffer,0,bufferPosition).rewind();
+				bufferToWorkOn.put(0, buffer, 0, bufferPosition).rewind();
 
 				final CompletableFuture<ConversionInformation> pCf = new CompletableFuture<>();
 				publishingCfsConvert.add(pCf);
 				CollectionCluster cc = new CollectionCluster(clusterCount, clusterStartPosition, (int) (position - clusterStartPosition), bufferToWorkOn);
 
 				workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-						new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null) :
+						new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing) :
 						new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 
 				gui.updateSourceDatabaseDocuments(clusterCount, (long) ((double) (position - clusterStartPosition) / (double) clusterCount));
@@ -885,7 +898,7 @@ public class Main {
 				publishingCfsConvert.add(pCf);
 
 				workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-						new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null) :
+						new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing) :
 						new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 
 				i++;
@@ -918,21 +931,13 @@ public class Main {
 				try (Connection c = pds.getConnection()) {
 					try (Statement s = c.createStatement()) {
 						s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" drop column id");
-
-						/*
-						try( ResultSet r = s.executeQuery("select dbms_metadata.get_ddl('TABLE', '"+oracleCollectionInfo.getTableName()+"') from dual")) {
-							String tableDDl;
-							if(r.next()) {
-								tableDDl = r.getString(1);
-								s.execute("drop table \""+oracleCollectionInfo.getTableName()+"\" purge");
-								s.execute(tableDDl.replace("STORE AS (", "STORE AS ( CACHE COMPRESS HIGH "));
-							}
-						} */
-
 					}
 				}
 			}
 		}
+
+		// COMPRESSION
+		manageTableCompression(conf, pds, oracleCollectionInfo);
 
 		if (bsonFile.getName().toLowerCase().endsWith(".gz")) {
 			loadCollectionDataFromGzippedDump(conf, collectionName, mongoDatabase, pds, oracleCollectionInfo, DB_SEMAPHORE, bsonFile);
@@ -957,15 +962,51 @@ public class Main {
 		}
 	}
 
+	private static void manageTableCompression(Configuration conf, PoolDataSource pds, OracleCollectionInfo oracleCollectionInfo) throws SQLException {
+		if (conf.compressionLevel > 0) {
+			if (ORACLE_MAJOR_VERSION >= 23) {
+				try (Connection c = pds.getConnection()) {
+					try (Statement s = c.createStatement()) {
+						switch (conf.compressionLevel) {
+							case 1:
+								s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move json(data) as (compress low)");
+								break;
+							case 2:
+								s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move json(data) as (compress medium)");
+								break;
+							case 3:
+								s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move json(data) as (compress high)");
+								break;
+						}
+					}
+				}
+			}
+			else if (ORACLE_MAJOR_VERSION == 21) {
+
+			}
+			else if (ORACLE_MAJOR_VERSION == 19) {
+				if (AUTONOMOUS_DATABASE) {
+
+				}
+				else {
+
+				}
+			}
+			else {
+
+			}
+		}
+	}
+
 	private static void displayOracleDatabaseVersion(PoolDataSource adminPDS) {
 		try (Connection c = adminPDS.getConnection()) {
 			ORACLE_MAJOR_VERSION = c.getMetaData().getDatabaseMajorVersion();
 
 			try (Statement s = c.createStatement()) {
-				try(ResultSet r = s.executeQuery("select value from v$parameter where name='max_string_size'")) {
-					if(r.next()) {
+				try (ResultSet r = s.executeQuery("select value from v$parameter where name='max_string_size'")) {
+					if (r.next()) {
 						MAX_STRING_SIZE = r.getString(1);
-						LOGGER.info("max_string_size="+MAX_STRING_SIZE);
+						LOGGER.info("max_string_size=" + MAX_STRING_SIZE);
 					}
 				}
 
@@ -996,7 +1037,7 @@ public class Main {
 						//setDBName(r.getString(1));
 						//setRegion(r.getString(2));
 						//setBaseSize(r.getLong(3)/1024d/1024d/1024d);
-						REPORT.oracleDatabaseType = "Oracle Autonomous "+r.getString(5)+" ("+AUTONOMOUS_DATABASE_TYPE+")";
+						REPORT.oracleDatabaseType = "Oracle Autonomous " + r.getString(5) + " (" + AUTONOMOUS_DATABASE_TYPE + ")";
 					}
 				}
 				catch (SQLException ignored) {

@@ -3,15 +3,12 @@ package org.bson;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
-import java.sql.Blob;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.Statement;
 
 public class MyBSONDecoder {
 	protected final boolean outputOsonFormat;
+	private final boolean relativeOffsets;
+	private final boolean lastValueSharing;
+	private final boolean simpleValueSharing;
 	private boolean allowDuplicateKeys;
 	protected int bsonLength;
 	protected String oid;
@@ -21,17 +18,21 @@ public class MyBSONDecoder {
 
 	public MyBSONDecoder(boolean outputOsonFormat) {
 		this.outputOsonFormat = outputOsonFormat;
+		this.relativeOffsets = this.lastValueSharing = this.simpleValueSharing = false;
 	}
 
-	public MyBSONDecoder(boolean outputOsonFormat, boolean allowDuplicateKeys) {
+	public MyBSONDecoder(boolean outputOsonFormat, boolean allowDuplicateKeys, boolean relativeOffsets, boolean lastValueSharing, boolean simpleValueSharing) {
 		this.outputOsonFormat = outputOsonFormat;
 		this.allowDuplicateKeys = allowDuplicateKeys;
+		this.relativeOffsets = relativeOffsets;
+		this.lastValueSharing = lastValueSharing;
+		this.simpleValueSharing = simpleValueSharing;
 	}
 
 	public void convertBSONToOSON(final RawBsonDocument doc) {
 		//System.out.println(doc);
 		reader.reset(doc);
-		writer.reset(allowDuplicateKeys);
+		writer.reset(allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
 		writer.pipe(reader);
 		bsonLength = reader.getBsonInput().getPosition();
 	}
@@ -66,10 +67,15 @@ public class MyBSONDecoder {
 
 		String j = Files.readString(new File("test2.json").toPath());
 
-		MyBSONDecoder dec = new MyBSONDecoder(true, true);
-		dec.convertBSONToOSON( RawBsonDocument.parse(j) );
+		MyBSONDecoder dec = new MyBSONDecoder(true, true, true, true, true);
+		dec.convertBSONToOSON(RawBsonDocument.parse(j));
 		FileOutputStream o = new FileOutputStream("test.oson.out");
 		o.write(dec.getOSONData());
+		o.close();
+
+		RawBsonDocument rawBSON = RawBsonDocument.parse(j);
+		o = new FileOutputStream("test.bson.out");
+		o.write(rawBSON.getByteBuffer().array(),0,rawBSON.getByteBuffer().limit());
 		o.close();
 
 //		String j = "{\"test\":true, \"_id\": {\"$oid\":\"655471d50a6a7c1864ffa194\"}}";
