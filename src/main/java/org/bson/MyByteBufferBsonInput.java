@@ -109,14 +109,21 @@ public class MyByteBufferBsonInput implements BsonInput {
 		}
 	}
 
-	public void skipCString() {
-
+	public final void skipCString() {
+/*
 		for(boolean checkNext = true; checkNext; checkNext = this.buffer.get() != 0) {
 			if (!this.buffer.hasRemaining()) {
 				throw new BsonSerializationException("Found a BSON string that is not null-terminated");
 			}
 		}
+*/
+		final ByteBuf b = this.buffer;
+		final int rem = b.remaining();
+		for(int i = 0; i < rem; i++) {
+			if( b.get() == 0 ) return;
+		}
 
+		throw new BsonSerializationException("Found a BSON string that is not null-terminated");
 	}
 
 	public void skip(int numBytes) {

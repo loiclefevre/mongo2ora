@@ -22,6 +22,8 @@ public class CollectionReport {
 	public long tableSize;
 	public long totalKeysSize;
 	public int compressionLevel;
+	public long loadDurationInMS;
+	public long totalLoadDurationInMS;
 
 	public CollectionReport(String collectionName, boolean sampling) {
 		this.collectionName = collectionName;

@@ -32,6 +32,7 @@ import oracle.ucp.jdbc.PoolDataSourceFactory;
 import org.bson.BsonDocument;
 import org.bson.BsonInt32;
 import org.bson.Document;
+import org.bson.MyByteBufferBsonInput;
 
 import java.io.BufferedInputStream;
 import java.io.EOFException;
@@ -364,6 +365,8 @@ public class Main {
 
 				gui.addNewDestinationDatabaseCollection(collectionName, mongoCollection, null);
 
+				final long startClusterAnalysis = System.currentTimeMillis();
+
 				if (!conf.buildSecondaryIndexes) {
 					// retrieve average document size
 					final Iterable<Document> statsIterator = mongoCollection.aggregate(Arrays.asList(
@@ -400,7 +403,6 @@ public class Main {
 					final List<CompletableFuture<CollectionCluster>> publishingCfs = new LinkedList<>();
 
 					long tempMin = minId;
-					final long startClusterAnalysis = System.currentTimeMillis();
 
 					for (long i = 0; i < iterations; i++, tempMin += bucketSize) {
 
@@ -469,6 +471,8 @@ public class Main {
 						}
 					}
 
+					REPORT.getCollection(oracleCollectionInfo.getCollectionName()).loadDurationInMS = System.currentTimeMillis()-startClusterAnalysis;
+
 					// source == mongodump
 					if (ORACLE_MAJOR_VERSION >= 23) {
 						String IDproperty = conf.collectionsProperties.getProperty(collectionName + ".ID", "EMBEDDED_OID");
@@ -486,6 +490,8 @@ public class Main {
 				// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
 				oracleCollectionInfo.finish(mediumPDS, mongoCollection, null, conf, gui, ORACLE_MAJOR_VERSION);
 				//gui.finishCollection();
+
+				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).totalLoadDurationInMS = System.currentTimeMillis()-startClusterAnalysis;
 
 				computeOracleObjectSize(pds, oracleCollectionInfo, conf);
 
@@ -596,9 +602,13 @@ public class Main {
 					loadCollectionDataFromDump(conf, collectionName, mongoDatabase, pds, oracleCollectionInfo, DB_SEMAPHORE);
 				}
 
+				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).loadDurationInMS = System.currentTimeMillis()-startTimeCollection;
+
 				// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
 				oracleCollectionInfo.finish(mediumPDS, null, mongoDatabase.getCollectionMetadata(collectionName), conf, gui, ORACLE_MAJOR_VERSION);
 				//gui.finishCollection();
+
+				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).totalLoadDurationInMS = System.currentTimeMillis()-startTimeCollection;
 
 				computeOracleObjectSize(pds, oracleCollectionInfo, conf);
 

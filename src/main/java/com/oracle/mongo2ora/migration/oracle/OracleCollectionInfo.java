@@ -422,7 +422,6 @@ public class OracleCollectionInfo {
 	 *
 	 * @param mediumPDS
 	 * @param mongoCollection
-	 * @param skipSecondaryIndexes
 	 * @throws SQLException
 	 */
 	public void finish(PoolDataSource mediumPDS, MongoCollection<Document> mongoCollection, MongoDBMetadata collectionMetadataDump, Configuration conf, ASCIIGUI gui, int oracleVersion) throws SQLException, OracleException {
@@ -525,11 +524,11 @@ public class OracleCollectionInfo {
 						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
 
 						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from \"" + tableName + "\" where rownum <= 1000)\n" +
-								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
+								"select u.field_path, type, length, low, high from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"', high path '$.\"o:high_value\"' )) u")) {
 							while (r.next()) {
 								String key = r.getString(1);
 								if (!r.wasNull()) {
-									fieldsInfo.put(key, new FieldInfo(key, r.getString(2), r.getInt(3)));
+									fieldsInfo.put(key, new FieldInfo(key, r.getString(2), r.getInt(3), r.getString(4), r.getString(5)));
 								}
 							}
 						}
@@ -666,11 +665,11 @@ public class OracleCollectionInfo {
 						final Map<String, FieldInfo> fieldsInfo = new TreeMap<>();
 
 						try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (mongoDBAPICompatible ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from \"" + tableName + "\" where rownum <= 1000)\n" +
-								"select u.field_path, type, length from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"' )) u")) {
+								"select u.field_path, type, length, low, high from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"', high path '$.\"o:high_value\"' )) u")) {
 							while (r.next()) {
 								String key = r.getString(1);
 								if (!r.wasNull()) {
-									fieldsInfo.put(key, new FieldInfo(key, r.getString(2), r.getInt(3)));
+									fieldsInfo.put(key, new FieldInfo(key, r.getString(2), r.getInt(3), r.getString(4), r.getString(5)));
 								}
 							}
 						}
@@ -1115,6 +1114,8 @@ public class OracleCollectionInfo {
 	}
 
 	static class FieldInfo {
+		public String low;
+		public String high;
 		public String path;
 		public String type;
 		public int length;
@@ -1122,10 +1123,12 @@ public class OracleCollectionInfo {
 		public FieldInfo() {
 		}
 
-		public FieldInfo(String path, String type, int length) {
+		public FieldInfo(String path, String type, int length, String lowValue, String highValue) {
 			this.path = path;
 			this.type = type;
 			this.length = length;
+			this.low = lowValue;
+			this.high = lowValue;
 		}
 
 		public String getPath() {
@@ -1150,6 +1153,22 @@ public class OracleCollectionInfo {
 
 		public void setLength(int length) {
 			this.length = length;
+		}
+
+		public String getLow() {
+			return low;
+		}
+
+		public void setLow(String low) {
+			this.low = low;
+		}
+
+		public String getHigh() {
+			return high;
+		}
+
+		public void setHigh(String high) {
+			this.high = high;
 		}
 	}
 /*

@@ -60,6 +60,8 @@ public class LoadingReport {
 			if(cr.compressionLevel > 0) {
 				r.append("    - Compression level ..... ").append(cr.compressionLevel).append('\n');
 			}
+			r.append("  - Data load duration ...... ").append(Tools.getHumanDuration(cr.loadDurationInMS)).append('\n');
+			r.append("  - Total load duration ..... ").append(Tools.getHumanDuration(cr.totalLoadDurationInMS)).append(" (includes constraints, indexes, materialized views, etc.)").append('\n');
 			if(cr.wasDropped) r.append("  - Was dropped ............. Yes\n");
 			r.append("  - MongoDB API compatible .. ").append(cr.mongoDBAPICompatible?"Yes":"No").append('\n');
 			r.append("  - Created index(es) ....... ").append(cr.indexes.size()).append('\n');
@@ -74,9 +76,11 @@ public class LoadingReport {
 				else
 					r.append("    - Fields ................ 1\n");
 				r.append("    - Size .................. ").append(Tools.getHumanReadableSize(ir.indexSize)).append('\n');
+				r.append("    - Creation duration ..... ").append(Tools.getHumanDuration(ir.indexCreationDurationInMS)).append('\n');
 				if(ir.type == IndexType.COMPOUND_MV || ir.type == IndexType.SIMPLE_MV) {
 					r.append("    - Materialized View ..... ").append(ir.materializedViewName).append('\n');
 					r.append("      - Size ................ ").append(Tools.getHumanReadableSize(ir.materializedViewSize)).append('\n');
+					r.append("      - Creation duration ... ").append(Tools.getHumanDuration(ir.materializedViewCreationDurationInMS)).append('\n');
 				}
 
 

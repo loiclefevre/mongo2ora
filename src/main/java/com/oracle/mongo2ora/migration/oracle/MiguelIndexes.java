@@ -128,9 +128,9 @@ public class MiguelIndexes {
 						}
 						else if (isMaterializedViewBasedIndex) {
 							LOGGER.info("Create materialized view based index ...");
-							boolean mvCreatedWithSuccess = buildMaterializedView(gui, s, oracleCollectionInfo, mi, keyFieldInfoPathMap, conf, oracleVersion, keyTypes, fieldsInfo);
-							if(mvCreatedWithSuccess) {
-								createIndexOnMaterializedView(gui, s, oracleCollectionInfo, mi, keyFieldInfoPathMap, conf, oracleVersion, keyTypes, fieldsInfo);
+							BuildMVStatus mvCreationInfo = buildMaterializedView(gui, s, oracleCollectionInfo, mi, keyFieldInfoPathMap, conf, oracleVersion, keyTypes, fieldsInfo);
+							if(mvCreationInfo.success) {
+								createIndexOnMaterializedView(gui, s, oracleCollectionInfo, mi, keyFieldInfoPathMap, conf, oracleVersion, keyTypes, fieldsInfo, mvCreationInfo.creationDurationInMS);
 							}
 						}
 						else {
@@ -176,7 +176,7 @@ public class MiguelIndexes {
 		}
 	}
 
-	private static void createIndexOnMaterializedView(ASCIIGUI gui, Statement stmt, OracleCollectionInfo oracleCollectionInfo, MetadataIndex mi, Map<String, String> keyFieldInfoPathMap, Configuration conf, int oracleVersion, Map<String, String> keyTypes, Map<String, OracleCollectionInfo.FieldInfo> fieldsInfo) {
+	private static void createIndexOnMaterializedView(ASCIIGUI gui, Statement stmt, OracleCollectionInfo oracleCollectionInfo, MetadataIndex mi, Map<String, String> keyFieldInfoPathMap, Configuration conf, int oracleVersion, Map<String, String> keyTypes, Map<String, OracleCollectionInfo.FieldInfo> fieldsInfo, long mvCreationDurationInMS) {
 		final StringBuilder s = new StringBuilder();
 
 		s.append("create ").append(mi.isUnique() ? "unique " : "").append("index ").append(oracleVersion >= 23 ? "if not exists " : "").append("\"").append(oracleCollectionInfo.getTableName()).append('$').append(mi.getName()).append("\" on ")
@@ -195,6 +195,18 @@ public class MiguelIndexes {
 
 		s.append(")").append(" PARALLEL").append(conf.maxSQLParallelDegree == -1 ? "" : " " + conf.maxSQLParallelDegree).append(" compute statistics");
 
+		if(conf.compressionLevel > 0) {
+			switch (conf.compressionLevel) {
+				case 1:
+				case 2:
+					s.append(" COMPRESS ADVANCED LOW");
+					break;
+				case 3:
+					s.append(" COMPRESS ADVANCED HIGH");
+					break;
+			}
+		}
+
 		LOGGER.info(s.toString());
 
 		try {
@@ -202,12 +214,14 @@ public class MiguelIndexes {
 			// TODO advanced compress?
 			// TODO nologging?
 			// TODO drop before creating it (--drop-index)
-
+			long start = System.currentTimeMillis();
 			stmt.execute(s.toString());
+			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).addIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName()), mi.getKey().columns.size() > 1 ? IndexType.COMPOUND_MV : IndexType.SIMPLE_MV);
+			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).getIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName())).indexCreationDurationInMS = System.currentTimeMillis()-start;
+			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).getIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName())).materializedViewCreationDurationInMS = mvCreationDurationInMS;
 			stmt.execute("alter session disable parallel ddl");
 
 			gui.endIndex(mi.getName(), true);
-			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).addIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName()), mi.getKey().columns.size() > 1 ? IndexType.COMPOUND_MV : IndexType.SIMPLE_MV);
 			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).getIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName())).numberOfFields = mi.getKey().getNumberOfFields();
 			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).getIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName())).materializedViewName = "mv4qrw_"+oracleCollectionInfo.getTableName()+ "$"+ mi.getName();
 
@@ -238,13 +252,29 @@ public class MiguelIndexes {
 		return keyFieldInfoPathMap;
 	}
 
-	private static boolean buildMaterializedView(ASCIIGUI gui, Statement stmt, OracleCollectionInfo oracleCollectionInfo, MetadataIndex mi, Map<String, String> keyFieldInfoPathMap, Configuration conf, int oracleVersion, Map<String, String> keyTypes, Map<String, OracleCollectionInfo.FieldInfo> fieldsInfo) {
+	static class BuildMVStatus {
+		public final boolean success;
+		public final long creationDurationInMS;
+
+		public BuildMVStatus(boolean success, long creationDurationInMS) {
+			this.success = success;
+			this.creationDurationInMS = creationDurationInMS;
+		}
+	}
+
+	private static BuildMVStatus buildMaterializedView(ASCIIGUI gui, Statement stmt, OracleCollectionInfo oracleCollectionInfo, MetadataIndex mi, Map<String, String> keyFieldInfoPathMap, Configuration conf, int oracleVersion, Map<String, String> keyTypes, Map<String, OracleCollectionInfo.FieldInfo> fieldsInfo) {
 		final StringBuilder s = new StringBuilder();
 
 		s.append("create materialized view ").append(oracleVersion >= 23 ? "if not exists " : "").append("mv4qrw_").append(oracleCollectionInfo.getTableName()).append('$').append(mi.getName()).append("\n")
+				.append(conf.compressionLevel > 0 ? """
+						ROW STORE COMPRESS ADVANCED
+						""" : "")
+				.append("PARALLEL").append(conf.maxSQLParallelDegree == -1 ? "" : " " + conf.maxSQLParallelDegree).append('\n')
 				.append("""
 						build immediate
 						refresh fast on statement with primary key
+						""")
+				.append("""
 						as
 						select col.id, jt.*
 						  from \"""").append(oracleCollectionInfo.getTableName()).append("\" col,\n")
@@ -252,7 +282,7 @@ public class MiguelIndexes {
 				.append(getMVJSONPathsRecursive(mi, keyTypes, keyFieldInfoPathMap, fieldsInfo))
 				.append("\n                 ) jt");
 
-		LOGGER.debug(s.toString());
+		LOGGER.info(s.toString());
 
 		try {
 			// TODO compress?
@@ -265,9 +295,10 @@ public class MiguelIndexes {
 			try {
 				stmt.execute("drop materialized view "+"mv4qrw_"+oracleCollectionInfo.getTableName()+"$"+mi.getName());
 			}catch(SQLException ignored) {}
-			stmt.execute(s.toString());
 
-			return true;
+			long start = System.currentTimeMillis();
+			stmt.execute(s.toString());
+			return new BuildMVStatus(true, System.currentTimeMillis()-start);
 		}
 		catch (SQLException sqle) {
 			LOGGER.error("Creating materialized view for index! ", sqle);
@@ -276,7 +307,7 @@ public class MiguelIndexes {
 			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).getFailedIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName())).numberOfFields = mi.getKey().getNumberOfFields();
 		}
 
-		return false;
+		return new BuildMVStatus(false,0);
 	}
 
 	private static String getMVJSONPathsRecursive(MetadataIndex mi, Map<String, String> keyTypes, Map<String, String> keyFieldInfoPathMap, Map<String, OracleCollectionInfo.FieldInfo> fieldsInfo) {
@@ -358,6 +389,18 @@ public class MiguelIndexes {
 
 		s.append(", 1)").append(" PARALLEL").append(conf.maxSQLParallelDegree == -1 ? "" : " " + conf.maxSQLParallelDegree).append(" compute statistics");
 
+		if(conf.compressionLevel > 0) {
+			switch (conf.compressionLevel) {
+				case 1:
+				case 2:
+					s.append(" COMPRESS ADVANCED LOW");
+					break;
+				case 3:
+					s.append(" COMPRESS ADVANCED HIGH");
+					break;
+			}
+		}
+
 		LOGGER.info(s.toString());
 
 		try {
@@ -368,10 +411,14 @@ public class MiguelIndexes {
 
 			gui.startIndex(mi.getName());
 			stmt.execute("alter session enable parallel ddl");
+
+			long start = System.currentTimeMillis();
 			stmt.execute(s.toString());
+			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).addIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName()), mi.getKey().columns.size() > 1 ? IndexType.COMPOUND : IndexType.SIMPLE);
+			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).getIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName())).indexCreationDurationInMS = System.currentTimeMillis()-start;
+
 			stmt.execute("alter session disable parallel ddl");
 			gui.endIndex(mi.getName(), true);
-			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).addIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName()), mi.getKey().columns.size() > 1 ? IndexType.COMPOUND : IndexType.SIMPLE);
 			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).getIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName())).numberOfFields = mi.getKey().getNumberOfFields();
 
 			// TODO disable parallel index?
@@ -536,12 +583,12 @@ public class MiguelIndexes {
 		}
 		else {
 			LOGGER.info("Gathering Data Guide from " + oracleCollectionInfo.getCollectionName() + " on " + rows + " JSON documents...");
-			try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (conf.mongodbAPICompatible || oracleVersion >= 23 ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON/*+DBMS_JSON.GATHER_STATS*/) format JSON returning clob) as json_document from \"" + oracleCollectionInfo.getTableName() + "\" /*where rownum <= 1000*/)\n" +
-					"select u.field_path, type, length/*, low, high*/ from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"'/*, low path '$.\"o:low_value\"', high path '$.\"o:high_value\"'*/ )) u")) {
+			try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (conf.mongodbAPICompatible || oracleVersion >= 23 ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from \"" + oracleCollectionInfo.getTableName() + "\" /*where rownum <= 1000*/)\n" +
+					"select u.field_path, type, length, low, high from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"', high path '$.\"o:high_value\"' )) u")) {
 				while (r.next()) {
 					String path = r.getString(1);
 					if (!r.wasNull()) {
-						fieldsInfo.put(path, new OracleCollectionInfo.FieldInfo(path, r.getString(2), r.getInt(3)));
+						fieldsInfo.put(path, new OracleCollectionInfo.FieldInfo(path, r.getString(2), r.getInt(3), r.getString(4), r.getString(5)));
 					}
 				}
 			}
