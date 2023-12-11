@@ -272,7 +272,7 @@ public class Main {
 		}
 		finally {
 			LOGGER.info(REPORT.toString());
-			TERM.write("A report is available inside mongo2ora.log");
+			TERM.write("A report is available inside mongo2ora.log\n");
 		}
 	}
 
