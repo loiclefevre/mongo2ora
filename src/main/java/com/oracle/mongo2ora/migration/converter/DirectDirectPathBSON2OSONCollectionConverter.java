@@ -128,11 +128,11 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 						//LOGGER.info("Columns used for Direct Path API: "+("EMBEDDED_OID".equalsIgnoreCase(IDproperty) ? "VERSION, DATA" : "ID, VERSION, DATA"));
 
 						try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), "\"" + tableName + "\"", null,
-								"EMBEDDED_OID".equalsIgnoreCase(IDproperty) ?
+								"EMBEDDED_OID".equalsIgnoreCase(IDproperty) && oracleDBVersion >= 23 ?
 								new String[]{"VERSION", "DATA"} : new String[]{"ID", "VERSION", "DATA"} /* String.format("p%d", partitionId),*/)) {
 							final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
 
-							if("EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
+							if("EMBEDDED_OID".equalsIgnoreCase(IDproperty) && oracleDBVersion >= 23) {
 								// ID column is filled using path expression from document content (usually $._id)
 								//long maxOSONLength = 0;
 								//RawBsonDocument largestBSONDoc = null;
