@@ -14,7 +14,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <main.class>com.oracle.mongo2ora.Main</main.class>
-        <graalvm.version>22.3.1</graalvm.version>
+        <graalvm.version>23.1.1</graalvm.version>
         <!-- oracle.jdbc.version>21.9.0.0</oracle.jdbc.version -->
         <oracle.jdbc.version>23.3.0.23.09</oracle.jdbc.version>
         <oracle.jdbc.version_old>21.11.0.0</oracle.jdbc.version_old>
@@ -267,7 +267,7 @@
             <plugin>
                 <groupId>org.graalvm.buildtools</groupId>
                 <artifactId>native-maven-plugin</artifactId>
-                <version>0.9.21</version> <!-- see: https://graalvm.github.io/native-build-tools/latest/index.html -->
+                <version>0.9.28</version> <!-- see: https://graalvm.github.io/native-build-tools/latest/index.html -->
                 <extensions>true</extensions>
                 <executions>
                     <execution>
@@ -320,7 +320,7 @@
                         <!-- Profile Guided Optimization, GraalVM EE only -->
                         <!-- buildArg>- -pgo-instrument</buildArg -->
 			<!-- buildArg>- -pgo=../3newintrinsicsprofile.iprof</buildArg -->
-			<buildArg>--pgo=${project.basedir}/profile-22.3.0.iprof</buildArg>
+			<!-- buildArg>- -pgo=${project.basedir}/profile-22.3.0.iprof</ibuildArg -->
 
                         <!-- buildArg>-XX:+UnlockExperimentalVMOptions</buildArg>
                         <buildArg>-XX:G1MaxNewSizePercent=80</buildArg -->
