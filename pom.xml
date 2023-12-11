@@ -133,7 +133,8 @@
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
             <artifactId>ojdbc11</artifactId>
-            <version>23.3.0.23.11</version>
+            <!-- version>23.3.0.23.11</version -->
+            <version>23.3.0.11.12</version>
             <!-- version>${oracle.jdbc.version}</version -->
 <!--            <version>23.4.0.0</version>-->
         </dependency>
