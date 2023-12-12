@@ -213,7 +213,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 									count++;
 
 									if(count % flushSize ==0) {
-										p.flushData();
+										//p.flushData();
 										Thread.yield();
 										/*LOGGER.info("Thread " + partitionId +" needed "+((double)totalConvert/10000d)+"ms to convert a BSON into OSON, and "+((double)totalRow/10000d)+"ms to send a row");
 										totalRow = totalConvert = 0;*/
