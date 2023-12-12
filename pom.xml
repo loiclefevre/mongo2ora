@@ -310,7 +310,7 @@
                         <buildArg>--gc=G1</buildArg>
                         <buildArg>-H:G1HeapRegionSize=32M</buildArg>
                         <buildArg>-H:-UseCompressedReferences</buildArg>
-                        <!-- buildArg>-H:+NativeArchitecture</buildArg -->
+                        <buildArg>-H:+NativeArchitecture</buildArg>
                         <buildArg>-H:+OptStringConcat</buildArg>
                         <buildArg>-H:-OutlineStringBuilderAppends</buildArg>
 			
