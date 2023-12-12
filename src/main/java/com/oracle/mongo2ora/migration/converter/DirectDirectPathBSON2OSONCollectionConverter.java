@@ -179,7 +179,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 
 							} else {
 								// ID column is filled using generated value either present from the document or in the case there is none from a random generator
-								final HashFuncs uuidGenerator = new HashFuncs();
+								//final HashFuncs uuidGenerator = new HashFuncs();
 
 								while (cursor.hasNext()) {
 									final RawBsonDocument doc = cursor.next();
@@ -190,11 +190,11 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 									osonLength += osonData.length;
 
 									p.beginNew();
-									if(decoder.hasOid()) {
+									//if(decoder.hasOid()) {
 										p.append(decoder.getOid());
-									} else {
+									/*} else {
 										p.append(uuidGenerator.getRandom());
-									}
+									}*/
 									p.append(version);
 									p.append(osonData);
 									p.finish();

@@ -282,7 +282,7 @@ public class Main {
 				MongoClientSettings.builder()
 						.applyToSocketSettings(builder -> builder.connectTimeout(1, TimeUnit.DAYS))
 						.applyToConnectionPoolSettings(builder ->
-								builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxWaitTime(8,TimeUnit.MINUTES).maxConnectionIdleTime(10, TimeUnit.MINUTES))
+								builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxWaitTime(1,TimeUnit.DAYS).maxConnectionIdleTime(10, TimeUnit.MINUTES))
 						.applyToClusterSettings(builder ->
 								builder.hosts(Arrays.asList(new ServerAddress(conf.sourceHost, conf.sourcePort))))
 						.build()
@@ -291,7 +291,7 @@ public class Main {
 						.applyToSocketSettings(builder -> builder.connectTimeout(1, TimeUnit.DAYS))
 						.credential(MongoCredential.createCredential(conf.sourceUsername, conf.sourceDatabase, conf.sourcePassword.toCharArray()))
 						.applyToConnectionPoolSettings(builder ->
-								builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxWaitTime(8,TimeUnit.MINUTES).maxConnectionIdleTime(10, TimeUnit.MINUTES))
+								builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxWaitTime(1,TimeUnit.DAYS).maxConnectionIdleTime(10, TimeUnit.MINUTES))
 						.applyToClusterSettings(builder ->
 								builder.hosts(Arrays.asList(new ServerAddress(conf.sourceHost, conf.sourcePort))))
 						.build();
