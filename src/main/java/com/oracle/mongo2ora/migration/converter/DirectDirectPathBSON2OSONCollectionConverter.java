@@ -181,14 +181,21 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 								// ID column is filled using generated value either present from the document or in the case there is none from a random generator
 								//final HashFuncs uuidGenerator = new HashFuncs();
 
+								long totalConvert = 0;
+								long totalRow = 0;
 								while (cursor.hasNext()) {
 									final RawBsonDocument doc = cursor.next();
+									long startTime = System.currentTimeMillis();
 									decoder.convertBSONToOSON(doc);
+									long endTime = System.currentTimeMillis();
+									totalConvert += (endTime-startTime);
+
 									bsonLength += decoder.getBsonLength();
 
 									final byte[] osonData = decoder.getOSONData();
 									osonLength += osonData.length;
 
+									long startRow = System.currentTimeMillis();
 									p.beginNew();
 									//if(decoder.hasOid()) {
 										p.append(decoder.getOid());
@@ -198,7 +205,15 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 									p.append(version);
 									p.append(osonData);
 									p.finish();
+									long endRow = System.currentTimeMillis();
+									totalRow += (endRow-startRow);
+
 									count++;
+
+									if(count % 10000 ==0) {
+										LOGGER.info("Thread " + partitionId +" needed "+((double)totalConvert/10000d)+"ms to convert a BSON into OSON, and "+((double)totalRow/10000d)+"ms to send a row");
+										totalRow = totalConvert = 0;
+									}
 								}
 							}
 
