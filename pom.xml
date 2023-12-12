@@ -306,7 +306,7 @@
                         <!-- buildArg>- -gc=serial</buildArg>
                         <buildArg>-R:MaximumHeapSizePercent=95</buildArg -->
 
-                        <buildArg>-O 2</buildArg>
+                        <buildArg>-O2</buildArg>
 
                         <!-- G1 GC -->
                         <buildArg>--gc=G1</buildArg>
