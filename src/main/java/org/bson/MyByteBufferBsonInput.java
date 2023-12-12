@@ -7,9 +7,10 @@ import org.bson.types.ObjectId;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 public class MyByteBufferBsonInput implements BsonInput {
-	private static final Charset UTF8_CHARSET = Charset.forName("UTF-8");
+	private static final Charset UTF8_CHARSET = StandardCharsets.UTF_8;
 	private static final String REPLACEMENT_STRING = UTF8_CHARSET.newDecoder().replacement();
 	private static final String[] ONE_BYTE_ASCII_STRINGS = new String[128];
 	private ByteBuf buffer;
@@ -17,7 +18,7 @@ public class MyByteBufferBsonInput implements BsonInput {
 	public MyByteBufferBsonInput() {
 	}
 
-	public void reset(ByteBuf buffer) {
+	public final void reset(ByteBuf buffer) {
 		this.buffer = buffer;
 	}
 
@@ -30,41 +31,41 @@ public class MyByteBufferBsonInput implements BsonInput {
 		}
 	}
 
-	public int getPosition() {
+	public final int getPosition() {
 		return this.buffer.position();
 	}
 
-	public byte readByte() {
+	public final byte readByte() {
 		return this.buffer.get();
 	}
 
-	public void readBytes(final byte[] bytes) {
+	public final void readBytes(final byte[] bytes) {
 		this.buffer.get(bytes);
 	}
 
-	public void readBytes(byte[] bytes, int offset, int length) {
+	public final void readBytes(byte[] bytes, int offset, int length) {
 		this.buffer.get(bytes, offset, length);
 	}
 
-	public long readInt64() {
+	public final long readInt64() {
 		return this.buffer.getLong();
 	}
 
-	public double readDouble() {
+	public final double readDouble() {
 		return this.buffer.getDouble();
 	}
 
-	public int readInt32() {
+	public final int readInt32() {
 		return this.buffer.getInt();
 	}
 
 	private final byte[] bytes = new byte[12];
-	public ObjectId readObjectId() {
+	public final ObjectId readObjectId() {
 		this.readBytes(bytes,0,12);
 		return new ObjectId(ByteBuffer.wrap(bytes));
 	}
 
-	public String readString() {
+	public final String readString() {
 		final int size = this.readInt32();
         /*if (size <= 0) {
             throw new BsonSerializationException(String.format("While decoding a BSON string found a size that is not a positive number: %d", size));
@@ -73,7 +74,7 @@ public class MyByteBufferBsonInput implements BsonInput {
 		//}
 	}
 
-	public String readCString() {
+	public final String readCString() {
 		int mark = this.buffer.position();
 		this.skipCString();
 		int size = this.buffer.position() - mark;
@@ -126,7 +127,7 @@ public class MyByteBufferBsonInput implements BsonInput {
 		throw new BsonSerializationException("Found a BSON string that is not null-terminated");
 	}
 
-	public void skip(int numBytes) {
+	public final void skip(int numBytes) {
 		this.buffer.position(this.buffer.position() + numBytes);
 	}
 
@@ -144,7 +145,7 @@ public class MyByteBufferBsonInput implements BsonInput {
 		};
 	}
 
-	public boolean hasRemaining() {
+	public final boolean hasRemaining() {
 		return this.buffer.hasRemaining();
 	}
 

@@ -24,6 +24,7 @@ public class Configuration {
 	public String source;
 	public String destination;
 	public int batchSize = 4096;
+	public int flushSize = 4096;
 	public int cores = Runtime.getRuntime().availableProcessors();
 	public boolean awrReport;
 	public long startSnapID = -1;
@@ -196,6 +197,18 @@ public class Configuration {
 					}
 					else {
 						displayUsage("Expected valid batch size parameter: -b <number>");
+					}
+					break;
+
+				case "-f":
+					if (i + 1 < args.length) {
+						conf.flushSize = Integer.parseInt(args[++i]);
+						if (conf.flushSize <= 0) {
+							displayUsage("Expected valid flush size parameter: -f <strictly positive number>");
+						}
+					}
+					else {
+						displayUsage("Expected valid flush size parameter: -f <number>");
 					}
 					break;
 

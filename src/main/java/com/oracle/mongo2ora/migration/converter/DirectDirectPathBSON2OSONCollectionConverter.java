@@ -40,6 +40,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 	private final int partitionId;
 	private final ASCIIGUI gui;
 	private final int batchSize;
+	private final int flushSize;
 	private final String collectionName;
 
 	private final boolean mongoDBAPICompatible;
@@ -51,7 +52,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 	private final boolean lastValueSharing;
 	private final boolean simpleValueSharing;
 
-	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible, int oracleDBVersion, Properties collectionsProperties, boolean allowDuplicateKeys, Semaphore GUNZIP_SEMAPHORE, boolean relativeOffsets, boolean lastValueSharing, boolean simpleValueSharing) {
+	public DirectDirectPathBSON2OSONCollectionConverter(int partitionId, String collectionName, String tableName, CollectionCluster work, CompletableFuture<ConversionInformation> publishingCf, MongoDatabase database, PoolDataSource pds, ASCIIGUI gui, int batchSize, Semaphore DB_SEMAPHORE, boolean mongoDBAPICompatible, int oracleDBVersion, Properties collectionsProperties, boolean allowDuplicateKeys, Semaphore GUNZIP_SEMAPHORE, boolean relativeOffsets, boolean lastValueSharing, boolean simpleValueSharing, int flushSize) {
 		this.partitionId = partitionId;
 		this.collectionName = collectionName;
 		this.tableName = tableName;
@@ -61,6 +62,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 		this.pds = pds;
 		this.gui = gui;
 		this.batchSize = batchSize;
+		this.flushSize = flushSize;
 		this.DB_SEMAPHORE = DB_SEMAPHORE;
 		this.mongoDBAPICompatible = mongoDBAPICompatible;
 		this.oracleDBVersion = oracleDBVersion;
@@ -210,7 +212,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 
 									count++;
 
-									if(count % 10000 ==0) {
+									if(count % flushSize ==0) {
 										p.flushData();
 										Thread.yield();
 										/*LOGGER.info("Thread " + partitionId +" needed "+((double)totalConvert/10000d)+"ms to convert a BSON into OSON, and "+((double)totalRow/10000d)+"ms to send a row");
