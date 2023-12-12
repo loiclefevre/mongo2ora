@@ -320,7 +320,7 @@
 
                         <!-- Profile Guided Optimization, GraalVM EE only -->
                         <buildArg>--pgo-instrument</buildArg>
-			            <buildArg>--pgo=../mongo2ora.iprof</buildArg>
+			            <!-- buildArg>- -pgo=../mongo2ora.iprof</buildArg -->
 			<!-- buildArg>- -pgo=${project.basedir}/mongo2ora.iprof</ibuildArg -->
 
                         <!-- buildArg>-XX:+UnlockExperimentalVMOptions</buildArg>
