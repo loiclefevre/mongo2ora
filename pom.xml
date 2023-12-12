@@ -306,6 +306,8 @@
                         <!-- buildArg>- -gc=serial</buildArg>
                         <buildArg>-R:MaximumHeapSizePercent=95</buildArg -->
 
+                        <buildArg>-O 2</buildArg>
+
                         <!-- G1 GC -->
                         <buildArg>--gc=G1</buildArg>
                         <buildArg>-H:G1HeapRegionSize=32M</buildArg>
