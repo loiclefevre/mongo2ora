@@ -329,7 +329,7 @@ public class MyBSON2OSONWriter implements BsonWriter {
 	}
 
 
-	public void writeObjectId2(final byte[] objectId) {
+	public final void writeObjectId2(final byte[] objectId) {
 		if (oid == null && "_id".equals(this.getName())) {
 			oid = toHexString(objectId);
 		}
