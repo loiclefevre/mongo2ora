@@ -15,6 +15,7 @@ import oracle.jdbc.internal.OracleConnection;
 import oracle.json.util.HashFuncs;
 import oracle.ucp.jdbc.PoolDataSource;
 import org.bson.MyBSONDecoder;
+import org.bson.MyBSONToOSONConverter;
 import org.bson.RawBsonDocument;
 
 import java.sql.Connection;
@@ -132,12 +133,16 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 						try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), "\"" + tableName + "\"", null,
 								"EMBEDDED_OID".equalsIgnoreCase(IDproperty) && oracleDBVersion >= 23 ?
 								new String[]{"VERSION", "DATA"} : new String[]{"ID", "VERSION", "DATA"} /* String.format("p%d", partitionId),*/)) {
-							final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
+
+							final MyBSONToOSONConverter newDec = new MyBSONToOSONConverter(allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
+
 
 							if("EMBEDDED_OID".equalsIgnoreCase(IDproperty) && oracleDBVersion >= 23) {
 								// ID column is filled using path expression from document content (usually $._id)
 								//long maxOSONLength = 0;
 								//RawBsonDocument largestBSONDoc = null;
+								final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
+
 								while (cursor.hasNext()) {
 									final RawBsonDocument doc = cursor.next();
 
@@ -188,19 +193,23 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 								while (cursor.hasNext()) {
 									final RawBsonDocument doc = cursor.next();
 									//long startTime = System.currentTimeMillis();
-									decoder.convertBSONToOSON(doc);
+//decoder.convertBSONToOSON(doc);
+newDec.convertBSONToOSON(doc);
 									//long endTime = System.currentTimeMillis();
 									//totalConvert += (endTime-startTime);
 
-									bsonLength += decoder.getBsonLength();
+//bsonLength += decoder.getBsonLength();
+bsonLength += newDec.getBsonLength();
 
-									final byte[] osonData = decoder.getOSONData();
+//final byte[] osonData = decoder.getOSONData();
+final byte[] osonData = newDec.getOSONData();
 									osonLength += osonData.length;
 
 									//long startRow = System.currentTimeMillis();
 									p.beginNew();
 									//if(decoder.hasOid()) {
-										p.append(decoder.getOid());
+//p.append(decoder.getOid());
+p.append(newDec.getOid());
 									/*} else {
 										p.append(uuidGenerator.getRandom());
 									}*/
@@ -225,7 +234,8 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 
 							realConnection.commit(commitOptions);
 
-							KEYS_SIZE.getAndAdd( decoder.getKeysSize() );
+//KEYS_SIZE.getAndAdd( decoder.getKeysSize() );
+KEYS_SIZE.getAndAdd( newDec.getKeysSize() );
 						}
 					}
 					else {
