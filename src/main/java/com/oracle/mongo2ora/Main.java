@@ -244,7 +244,7 @@ public class Main {
 			conf.relativeOffsets = false;
 		}
 
-		LOGGER.info("  - relative offset: " + conf.relativeOffsets+(notIn23c?" (Oracle version "+ORACLE_MAJOR_VERSION+" < 23c":""));
+		LOGGER.info("  - relative offset: " + conf.relativeOffsets+(notIn23c?" (Oracle version "+ORACLE_MAJOR_VERSION+" < 23c)":""));
 		LOGGER.info("  - simple value sharing: " + conf.simpleValueSharing);
 		LOGGER.info("  - last value sharing: " + conf.lastValueSharing);
 
