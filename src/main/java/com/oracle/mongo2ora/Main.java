@@ -238,11 +238,13 @@ public class Main {
 		LOGGER.info("- allow duplicate keys: " + conf.allowDuplicateKeys);
 		LOGGER.info("- compression level: " + conf.compressionLevel);
 
+		boolean notIn23c = false;
 		if (ORACLE_MAJOR_VERSION < 23) {
+			notIn23c = true;
 			conf.relativeOffsets = false;
 		}
 
-		LOGGER.info("  - relative offset: " + conf.relativeOffsets);
+		LOGGER.info("  - relative offset: " + conf.relativeOffsets+(notIn23c?" (Oracle version "+ORACLE_MAJOR_VERSION+" < 23c":""));
 		LOGGER.info("  - simple value sharing: " + conf.simpleValueSharing);
 		LOGGER.info("  - last value sharing: " + conf.lastValueSharing);
 
@@ -996,10 +998,38 @@ public class Main {
 			}
 			else if (ORACLE_MAJOR_VERSION == 19) {
 				if (AUTONOMOUS_DATABASE) {
-
+					try (Connection c = pds.getConnection()) {
+						try (Statement s = c.createStatement()) {
+							switch (conf.compressionLevel) {
+								case 1:
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress low)");
+									break;
+								case 2:
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress medium)");
+									break;
+								case 3:
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress high)");
+									break;
+							}
+						}
+					}
 				}
 				else {
-
+					try (Connection c = pds.getConnection()) {
+						try (Statement s = c.createStatement()) {
+							switch (conf.compressionLevel) {
+								case 1:
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress low)");
+									break;
+								case 2:
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress medium)");
+									break;
+								case 3:
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress high)");
+									break;
+							}
+						}
+					}
 				}
 			}
 			else {
