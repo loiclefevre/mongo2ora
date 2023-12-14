@@ -32,7 +32,6 @@ public class MyBSONToOSONConverter {
 	}
 
 	private final MyByteArrayOutputStream out = new MyByteArrayOutputStream();
-	//private JsonGenerator gen;
 	private OracleJsonGenerator gen;
 	final static Map<Long, OracleJsonFactory> factoryCache = new HashMap<>();
 	private final boolean relativeOffsets;
@@ -41,9 +40,6 @@ public class MyBSONToOSONConverter {
 	private boolean allowDuplicateKeys;
 	protected int bsonLength;
 	protected String oid;
-	private final MyBSON2OSONWriter writer = new MyBSON2OSONWriter();
-	//private final MyBSON2NullWriter writer = new MyBSON2NullWriter();
-	//private final MyBSONReader reader = new MyBSONReader();
 
 	public MyBSONToOSONConverter() {
 		this.relativeOffsets = this.lastValueSharing = this.simpleValueSharing = false;
@@ -125,10 +121,10 @@ public class MyBSONToOSONConverter {
 					readObjectIdField(buf/*, 1*/);
 					break;
 				case 3:
-					readDocument(buf, false/*, 1*/);
+					readDocument(buf/*, 1*/);
 					break;
 				case 4:
-					readArray(buf,false/*, 1*/);
+					readArray(buf/*, 1*/);
 					break;
 				case 1:
 					readDoubleField(buf/*, 1*/);
@@ -170,16 +166,12 @@ public class MyBSONToOSONConverter {
 		//System.out.println(" ".repeat(level * 4) + "Field: " + fieldName + ", value: " + Instant.ofEpochMilli(value).atOffset(ZoneOffset.UTC));
 	}
 
-	private void readArray(final ByteBuffer buf, final boolean inArray/*, int level*/) {
+	private void readArray(final ByteBuffer buf/*, int level*/) {
 		//System.out.println(" ".repeat(level * 4) + "Array");
 		final String fieldName = readCString(buf);
 		keysSize += fieldName.length();
 
-		if(inArray) {
-			gen.writeStartArray();
-		} else {
-			gen.writeStartArray(fieldName);
-		}
+		gen.writeStartArray(fieldName);
 
 		final int size = buf.getInt();
 		//System.out.println(" ".repeat(level * 4) + "Field: " + fieldName + ", size: " + size);
@@ -212,10 +204,62 @@ public class MyBSONToOSONConverter {
 					readObjectIdScalar(buf/*, level + 1*/);
 					break;
 				case 3:
-					readDocument(buf,true/*, level + 1*/);
+					readDocumentInArray(buf/*, level + 1*/);
 					break;
 				case 4:
-					readArray(buf,true/*, level + 1*/);
+					readArrayInArray(buf/*, level + 1*/);
+					break;
+				case 8:
+					readBooleanScalar(buf/*, level + 1*/);
+					break;
+				default:
+					System.out.println("/!\\ type not managed yet in array: " + type);
+			}
+		}
+	}
+
+	private void readArrayInArray(final ByteBuffer buf/*, int level*/) {
+		//System.out.println(" ".repeat(level * 4) + "Array");
+		final String fieldName = readCString(buf);
+		keysSize += fieldName.length();
+
+		gen.writeStartArray();
+
+		final int size = buf.getInt();
+		//System.out.println(" ".repeat(level * 4) + "Field: " + fieldName + ", size: " + size);
+
+		final int maxSize = buf.position() + size;
+
+		while (buf.position() < maxSize) {
+			final byte type = buf.get();
+
+			switch (type) {
+				case 0:
+					gen.writeEnd();
+					return;
+				case 1:
+					readDoubleScalar(buf/*, level + 1*/);
+					break;
+				case 2:
+					readStringScalar(buf/*, level + 1*/);
+					break;
+				case 16:
+					readIntScalar(buf/*, level + 1*/);
+					break;
+				case 19:
+					readDecimal128Scalar(buf/*, level + 1*/);
+					break;
+				case 18:
+					readLongScalar(buf/*, level + 1*/);
+					break;
+				case 7:
+					readObjectIdScalar(buf/*, level + 1*/);
+					break;
+				case 3:
+					readDocumentInArray(buf/*, level + 1*/);
+					break;
+				case 4:
+					readArrayInArray(buf/*, level + 1*/);
 					break;
 				case 8:
 					readBooleanScalar(buf/*, level + 1*/);
@@ -247,18 +291,14 @@ public class MyBSONToOSONConverter {
 		//System.out.println(" ".repeat(level * 4) + "Value: " + value);
 	}
 
-	private void readDocument(final ByteBuffer buf, final boolean inArray/*, int level*/) {
+	private void readDocument(final ByteBuffer buf/*, int level*/) {
 		//System.out.println(" ".repeat(level * 4) + "Document");
 		final String fieldName = readCString(buf);
 		keysSize += fieldName.length();
 
 		//System.out.println("Document "+fieldName+" "+inArray);
 
-		if(inArray) {
-			gen.writeStartObject();
-		} else {
-			gen.writeStartObject(fieldName);
-		}
+		gen.writeStartObject(fieldName);
 
 		final int size = buf.getInt();
 		//System.out.println(" ".repeat(level * 4) + "Field: " + fieldName + ", size: " + size);
@@ -288,10 +328,65 @@ public class MyBSONToOSONConverter {
 					readLongField(buf/*, level + 1*/);
 					break;
 				case 3:
-					readDocument(buf, false/*, level + 1*/);
+					readDocument(buf/*, level + 1*/);
 					break;
 				case 4:
-					readArray(buf,false/*, level + 1*/);
+					readArray(buf/*, level + 1*/);
+					break;
+				case 8:
+					readBooleanField(buf/*, level + 1*/);
+					break;
+				case 19:
+					readDecimal128Field(buf/*, level + 1*/);
+					break;
+				default:
+					System.out.println("/!\\ type not managed yet in document: " + type);
+			}
+		}
+
+		//System.out.println(" ".repeat(level * 4) + buf.position() + "/" + maxSize + " since size=" + size);
+	}
+	private void readDocumentInArray(final ByteBuffer buf/*, int level*/) {
+		//System.out.println(" ".repeat(level * 4) + "Document");
+		final String fieldName = readCString(buf);
+		keysSize += fieldName.length();
+
+		//System.out.println("Document "+fieldName+" "+inArray);
+
+		gen.writeStartObject();
+
+		final int size = buf.getInt();
+		//System.out.println(" ".repeat(level * 4) + "Field: " + fieldName + ", size: " + size);
+
+		final int maxSize = buf.position() + size;
+
+		while (buf.position() < maxSize) {
+			final byte type = buf.get();
+
+			switch (type) {
+				case 0:
+					gen.writeEnd();
+					return;
+				case 1:
+					readDoubleField(buf/*, level + 1*/);
+					break;
+				case 2:
+					readStringField(buf/*, level + 1*/);
+					break;
+				case 10:
+					readNullField(buf/*, level + 1*/);
+					break;
+				case 16:
+					readIntField(buf/*, level + 1*/);
+					break;
+				case 18:
+					readLongField(buf/*, level + 1*/);
+					break;
+				case 3:
+					readDocument(buf/*, level + 1*/);
+					break;
+				case 4:
+					readArray(buf/*, level + 1*/);
 					break;
 				case 8:
 					readBooleanField(buf/*, level + 1*/);

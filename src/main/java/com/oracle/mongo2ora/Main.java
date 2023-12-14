@@ -32,7 +32,6 @@ import oracle.ucp.jdbc.PoolDataSourceFactory;
 import org.bson.BsonDocument;
 import org.bson.BsonInt32;
 import org.bson.Document;
-import org.bson.MyByteBufferBsonInput;
 
 import java.io.BufferedInputStream;
 import java.io.EOFException;
@@ -64,7 +63,7 @@ import static com.mongodb.client.model.Projections.include;
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
 import static com.oracle.mongo2ora.util.XYTerminalOutput.*;
 import static java.util.stream.Collectors.toList;
-import static org.bson.MyBSON2OSONWriter.KEYS_SIZE;
+import static org.bson.MyBSONToOSONConverter.KEYS_SIZE;
 
 /**
  * TODO:
@@ -226,7 +225,8 @@ public class Main {
 		if (conf.compressionLevel > 0) {
 			if (conf.acoEnabled) {
 				LOGGER.info("Compression level: " + conf.compressionLevel);
-			} else {
+			}
+			else {
 				LOGGER.error("Compression requested while Advanced Compression Option not explicitely enabled!");
 				Configuration.displayUsage("Compression requested while Advanced Compression Option not explicitely enabled!");
 			}
@@ -244,7 +244,7 @@ public class Main {
 			conf.relativeOffsets = false;
 		}
 
-		LOGGER.info("  - relative offset: " + conf.relativeOffsets+(notIn23c?" (Oracle version "+ORACLE_MAJOR_VERSION+" < 23c)":""));
+		LOGGER.info("  - relative offset: " + conf.relativeOffsets + (notIn23c ? " (Oracle version " + ORACLE_MAJOR_VERSION + " < 23c)" : ""));
 		LOGGER.info("  - simple value sharing: " + conf.simpleValueSharing);
 		LOGGER.info("  - last value sharing: " + conf.lastValueSharing);
 
@@ -284,7 +284,7 @@ public class Main {
 				MongoClientSettings.builder()
 						.applyToSocketSettings(builder -> builder.connectTimeout(1, TimeUnit.DAYS))
 						.applyToConnectionPoolSettings(builder ->
-								builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxWaitTime(1,TimeUnit.DAYS).maxConnectionIdleTime(10, TimeUnit.MINUTES))
+								builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxWaitTime(1, TimeUnit.DAYS).maxConnectionIdleTime(10, TimeUnit.MINUTES))
 						.applyToClusterSettings(builder ->
 								builder.hosts(Arrays.asList(new ServerAddress(conf.sourceHost, conf.sourcePort))))
 						.build()
@@ -293,7 +293,7 @@ public class Main {
 						.applyToSocketSettings(builder -> builder.connectTimeout(1, TimeUnit.DAYS))
 						.credential(MongoCredential.createCredential(conf.sourceUsername, conf.sourceDatabase, conf.sourcePassword.toCharArray()))
 						.applyToConnectionPoolSettings(builder ->
-								builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxWaitTime(1,TimeUnit.DAYS).maxConnectionIdleTime(10, TimeUnit.MINUTES))
+								builder.maxSize(conf.cores).minSize(conf.cores).maxConnecting(conf.cores).maxWaitTime(1, TimeUnit.DAYS).maxConnectionIdleTime(10, TimeUnit.MINUTES))
 						.applyToClusterSettings(builder ->
 								builder.hosts(Arrays.asList(new ServerAddress(conf.sourceHost, conf.sourcePort))))
 						.build();
@@ -473,7 +473,7 @@ public class Main {
 						}
 					}
 
-					REPORT.getCollection(oracleCollectionInfo.getCollectionName()).loadDurationInMS = System.currentTimeMillis()-startClusterAnalysis;
+					REPORT.getCollection(oracleCollectionInfo.getCollectionName()).loadDurationInMS = System.currentTimeMillis() - startClusterAnalysis;
 
 					// source == mongodump
 					if (ORACLE_MAJOR_VERSION >= 23) {
@@ -493,7 +493,7 @@ public class Main {
 				oracleCollectionInfo.finish(mediumPDS, mongoCollection, null, conf, gui, ORACLE_MAJOR_VERSION);
 				//gui.finishCollection();
 
-				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).totalLoadDurationInMS = System.currentTimeMillis()-startClusterAnalysis;
+				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).totalLoadDurationInMS = System.currentTimeMillis() - startClusterAnalysis;
 
 				computeOracleObjectSize(pds, oracleCollectionInfo, conf);
 
@@ -604,13 +604,13 @@ public class Main {
 					loadCollectionDataFromDump(conf, collectionName, mongoDatabase, pds, oracleCollectionInfo, DB_SEMAPHORE);
 				}
 
-				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).loadDurationInMS = System.currentTimeMillis()-startTimeCollection;
+				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).loadDurationInMS = System.currentTimeMillis() - startTimeCollection;
 
 				// TODO: manage indexes (build parallel using MEDIUM service changed configuration)
 				oracleCollectionInfo.finish(mediumPDS, null, mongoDatabase.getCollectionMetadata(collectionName), conf, gui, ORACLE_MAJOR_VERSION);
 				//gui.finishCollection();
 
-				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).totalLoadDurationInMS = System.currentTimeMillis()-startTimeCollection;
+				REPORT.getCollection(oracleCollectionInfo.getCollectionName()).totalLoadDurationInMS = System.currentTimeMillis() - startTimeCollection;
 
 				computeOracleObjectSize(pds, oracleCollectionInfo, conf);
 
@@ -1002,13 +1002,13 @@ public class Main {
 						try (Statement s = c.createStatement()) {
 							switch (conf.compressionLevel) {
 								case 1:
-									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress low)");
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob(" + (conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") store as (compress low)");
 									break;
 								case 2:
-									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress medium)");
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob(" + (conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") store as (compress medium)");
 									break;
 								case 3:
-									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress high)");
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob(" + (conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") store as (compress high)");
 									break;
 							}
 						}
@@ -1019,13 +1019,13 @@ public class Main {
 						try (Statement s = c.createStatement()) {
 							switch (conf.compressionLevel) {
 								case 1:
-									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress low)");
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob(" + (conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") store as (compress low)");
 									break;
 								case 2:
-									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress medium)");
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob(" + (conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") store as (compress medium)");
 									break;
 								case 3:
-									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob("+(conf.mongodbAPICompatible?"DATA":"JSON_DOCUMENT") +") store as (compress high)");
+									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move lob(" + (conf.mongodbAPICompatible ? "DATA" : "JSON_DOCUMENT") + ") store as (compress high)");
 									break;
 							}
 						}

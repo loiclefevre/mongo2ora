@@ -38,7 +38,7 @@ public class LoadingReport {
 					 "Destination ................. %s\n" +
 					 "Number of collection(s) ..... %d\n" +
 					 "Number of index(es) ......... %d\n"
-				, source+(sourceDumpFolder != null && sourceDumpFolder.isEmpty()?"":" ("+sourceDumpFolder+")")
+				, source+(sourceDumpFolder != null && !sourceDumpFolder.isEmpty()?" ("+sourceDumpFolder+")":"")
 				, oracleDatabaseType + " database v" + oracleVersion + (oracleInstanceNumber > 1 ? " (with " + oracleInstanceNumber + " RAC instances)" : "")
 				, numberOfCollections
 				, numberOfIndexes

@@ -12,9 +12,7 @@ import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
 import com.oracle.mongo2ora.migration.mongodb.MongoCollectionDump;
 import oracle.jdbc.driver.DPRowBinder2;
 import oracle.jdbc.internal.OracleConnection;
-import oracle.json.util.HashFuncs;
 import oracle.ucp.jdbc.PoolDataSource;
-import org.bson.MyBSONDecoder;
 import org.bson.MyBSONToOSONConverter;
 import org.bson.RawBsonDocument;
 
@@ -26,7 +24,7 @@ import java.util.concurrent.Semaphore;
 
 import static com.oracle.mongo2ora.Main.REPORT;
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
-import static org.bson.MyBSON2OSONWriter.KEYS_SIZE;
+import static org.bson.MyBSONToOSONConverter.KEYS_SIZE;
 
 public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 	private static final Logger LOGGER = Loggers.getLogger("converter");
@@ -141,7 +139,7 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 								// ID column is filled using path expression from document content (usually $._id)
 								//long maxOSONLength = 0;
 								//RawBsonDocument largestBSONDoc = null;
-								final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
+//								final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
 
 								while (cursor.hasNext()) {
 									final RawBsonDocument doc = cursor.next();
@@ -157,10 +155,10 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 										}
 									} catch(BsonInvalidOperationException ignored) {}
 */
-									decoder.convertBSONToOSON(doc);
-									bsonLength += decoder.getBsonLength();
+									newDec.convertBSONToOSON(doc);
+									bsonLength += newDec.getBsonLength();
 
-									final byte[] osonData = decoder.getOSONData();
+									final byte[] osonData = newDec.getOSONData();
 									osonLength += osonData.length;
 
 									/*if(osonData.length > maxOSONLength) {
@@ -173,6 +171,11 @@ public class DirectDirectPathBSON2OSONCollectionConverter implements Runnable {
 									p.append(osonData);
 									p.finish();
 									count++;
+
+									if(count % flushSize == 0) {
+										p.flushData();
+										Thread.yield();
+									}
 								}
 
 //								if(count > 0) {
@@ -224,8 +227,6 @@ p.append(newDec.getOid());
 									if(count % flushSize == 0) {
 										p.flushData();
 										Thread.yield();
-										/*LOGGER.info("Thread " + partitionId +" needed "+((double)totalConvert/10000d)+"ms to convert a BSON into OSON, and "+((double)totalRow/10000d)+"ms to send a row");
-										totalRow = totalConvert = 0;*/
 									}
 								}
 							}
@@ -240,7 +241,8 @@ KEYS_SIZE.getAndAdd( newDec.getKeysSize() );
 					}
 					else {
 						try (DPRowBinder2 p = new DPRowBinder2(c, pds.getUser().toUpperCase(), "\"" + tableName + "\"", null, new String[]{"ID", "VERSION", "JSON_DOCUMENT"} /* String.format("p%d", partitionId),*/)) {
-							final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
+//							final MyBSONDecoder decoder = new MyBSONDecoder(true, allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
+							final MyBSONToOSONConverter decoder = new MyBSONToOSONConverter(allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
 
 							while (cursor.hasNext()) {
 								final RawBsonDocument doc = cursor.next();
@@ -256,6 +258,11 @@ KEYS_SIZE.getAndAdd( newDec.getKeysSize() );
 								p.append(osonData);
 								p.finish();
 								count++;
+
+								if(count % flushSize == 0) {
+									p.flushData();
+									Thread.yield();
+								}
 							}
 
 							p.flushData();

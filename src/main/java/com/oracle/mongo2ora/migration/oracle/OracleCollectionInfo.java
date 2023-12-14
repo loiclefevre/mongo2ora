@@ -502,6 +502,7 @@ public class OracleCollectionInfo {
 
 					gui.endIndex("primary key", true);
 					REPORT.getCollection(collectionName).addIndex(primaryKeyIndexName != null ? primaryKeyIndexName : "PK_"+collectionName, IndexType.PRIMARY_KEY);
+					REPORT.getCollection(collectionName).getIndex(primaryKeyIndexName != null ? primaryKeyIndexName : "PK_"+collectionName).indexCreationDurationInMS=System.currentTimeMillis()-start;
 				}
 
 				// manage other MongoDB indexes
@@ -589,6 +590,7 @@ public class OracleCollectionInfo {
 									LOGGER.info("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 									gui.endIndex(indexMetadata.getString("name"), true);
 									REPORT.getCollection(collectionName).addIndex(indexMetadata.getString("name"), IndexType.GEO_JSON);
+									REPORT.getCollection(collectionName).getIndex(indexMetadata.getString("name")).indexCreationDurationInMS=System.currentTimeMillis()-start;
 								}
 								else if (is_IdPK(keys)) {
 									/*LOGGER.info("_id field index");
@@ -622,6 +624,7 @@ public class OracleCollectionInfo {
 									gui.endIndex(indexMetadata.getString("name"), true);
 									REPORT.getCollection(collectionName).addIndex(collectionName + "$"+indexMetadata.getString("name"), keys.keySet().size() == 1 ? IndexType.SIMPLE : IndexType.COMPOUND);
 									REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getString("name")).numberOfFields = keys.keySet().size();
+									REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getString("name")).indexCreationDurationInMS=System.currentTimeMillis()-start;
 								}
 							}
 						}
@@ -641,6 +644,7 @@ public class OracleCollectionInfo {
 							LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
 							gui.endIndex("search_index", true);
 							REPORT.getCollection(collectionName).addIndex(String.format("%s$search_index",collectionName), IndexType.JSON_SEARCH);
+							REPORT.getCollection(collectionName).getIndex(String.format("%s$search_index",collectionName)).indexCreationDurationInMS=System.currentTimeMillis()-start;
 						}
 
 						s.execute("ALTER SESSION DISABLE PARALLEL DDL");
@@ -723,6 +727,7 @@ public class OracleCollectionInfo {
 									LOGGER.info("Created spatial index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 									gui.endIndex(indexMetadata.getName(), true);
 									REPORT.getCollection(collectionName).addIndex(collectionName + "$"+indexMetadata.getName(), IndexType.GEO_JSON);
+									REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getName()).indexCreationDurationInMS=System.currentTimeMillis()-start;
 								}
 								else if (is_IdPK(indexMetadata.getKey())) {
 									/*LOGGER.info("_id field index");
@@ -759,6 +764,7 @@ public class OracleCollectionInfo {
 											gui.endIndex(indexMetadata.getName(), true);
 											REPORT.getCollection(collectionName).addIndex(collectionName + "$"+indexMetadata.getName(), indexMetadata.getKey().isCompound() ? IndexType.COMPOUND : IndexType.SIMPLE);
 											REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getName()).numberOfFields = indexMetadata.getKey().getNumberOfFields();
+											REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getName()).indexCreationDurationInMS=System.currentTimeMillis()-start;
 										}
 										catch (OracleException oe) {
 											LOGGER.error("Creating index", oe);
@@ -810,6 +816,7 @@ public class OracleCollectionInfo {
 							LOGGER.info("Created Search Index (every 1s sync) in " + getDurationSince(start));
 							gui.endIndex("search_index", true);
 							REPORT.getCollection(collectionName).addIndex(String.format("%s$search_index",collectionName), IndexType.JSON_SEARCH);
+							REPORT.getCollection(collectionName).getIndex(String.format("%s$search_index",collectionName)).indexCreationDurationInMS=System.currentTimeMillis()-start;
 						}
 
 						s.execute("ALTER SESSION DISABLE PARALLEL DDL");
