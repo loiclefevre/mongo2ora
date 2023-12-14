@@ -7,6 +7,7 @@ import org.bson.types.Decimal128;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -98,57 +99,58 @@ public class MyBSONToOSONConverter {
 		//System.out.println("Root, size=" + bsonLength);
 		final int maxSize = buf.position() + bsonLength;
 
-		final byte rootType = buf.get();
-		buf.position(buf.position()-1);
+		try {
+			gen.writeStartObject();
 
-		gen.writeStartObject();
+			while (buf.position() < maxSize) {
+				final byte type = buf.get();
 
-		while (buf.position() < maxSize) {
-			final byte type = buf.get();
-
-			switch (type) {
-				case 0:
-					gen.writeEnd();
-					gen.close();
-					return;
-				case 2:
-					readStringField(buf/*, 1*/);
-					break;
-				case 9:
-					readUTCDatetimeField(buf/*, 1*/);
-					break;
-				case 7:
-					readObjectIdField(buf/*, 1*/);
-					break;
-				case 3:
-					readDocument(buf/*, 1*/);
-					break;
-				case 4:
-					readArray(buf/*, 1*/);
-					break;
-				case 1:
-					readDoubleField(buf/*, 1*/);
-					break;
-				case 10:
-					readNullField(buf/*, 1*/);
-					break;
-				case 16:
-					readIntField(buf/*, 1*/);
-					break;
-				case 18:
-					readLongField(buf/*, 1*/);
-					break;
-				case 8:
-					readBooleanField(buf/*, level + 1*/);
-					break;
-				case 19:
-					readDecimal128Field(buf/*, level + 1*/);
-					break;
-				default:
-					System.out.println("/!\\ type not managed yet in root: " + type);
+				switch (type) {
+					case 0:
+						gen.writeEnd();
+						gen.close();
+						return;
+					case 2:
+						readStringField(buf/*, 1*/);
+						break;
+					case 9:
+						readUTCDatetimeField(buf/*, 1*/);
+						break;
+					case 7:
+						readObjectIdField(buf/*, 1*/);
+						break;
+					case 3:
+						readDocument(buf/*, 1*/);
+						break;
+					case 4:
+						readArray(buf/*, 1*/);
+						break;
+					case 1:
+						readDoubleField(buf/*, 1*/);
+						break;
+					case 10:
+						readNullField(buf/*, 1*/);
+						break;
+					case 16:
+						readIntField(buf/*, 1*/);
+						break;
+					case 18:
+						readLongField(buf/*, 1*/);
+						break;
+					case 8:
+						readBooleanField(buf/*, level + 1*/);
+						break;
+					case 19:
+						readDecimal128Field(buf/*, level + 1*/);
+						break;
+					default:
+						System.out.println("/!\\ type not managed yet in root: " + type);
+				}
 			}
 		}
-
+		catch(BufferUnderflowException bue) {
+			throw new RuntimeException("Error converting BSON to OSON:\n"+doc.toJson(), bue);
+		}
 
 		//System.out.println(doc);
 /*		reader.reset(doc);
@@ -163,6 +165,15 @@ public class MyBSONToOSONConverter {
 		keysSize+=fieldName.length();
 		final long value = buf.getLong();
 		gen.write(fieldName, Instant.ofEpochMilli(value).atOffset(ZoneOffset.UTC));
+		//System.out.println(" ".repeat(level * 4) + "Field: " + fieldName + ", value: " + Instant.ofEpochMilli(value).atOffset(ZoneOffset.UTC));
+	}
+
+	private void readUTCDatetimeScalar(final ByteBuffer buf/*, int level*/) {
+		//System.out.println(" ".repeat(level * 4) + "UTC Datetime field");
+		final String fieldName = readCString(buf);
+		keysSize+=fieldName.length();
+		final long value = buf.getLong();
+		gen.write(Instant.ofEpochMilli(value).atOffset(ZoneOffset.UTC));
 		//System.out.println(" ".repeat(level * 4) + "Field: " + fieldName + ", value: " + Instant.ofEpochMilli(value).atOffset(ZoneOffset.UTC));
 	}
 
@@ -211,6 +222,9 @@ public class MyBSONToOSONConverter {
 					break;
 				case 8:
 					readBooleanScalar(buf/*, level + 1*/);
+					break;
+				case 9:
+					readUTCDatetimeScalar(buf/*, 1*/);
 					break;
 				default:
 					System.out.println("/!\\ type not managed yet in array: " + type);
@@ -263,6 +277,9 @@ public class MyBSONToOSONConverter {
 					break;
 				case 8:
 					readBooleanScalar(buf/*, level + 1*/);
+					break;
+				case 9:
+					readUTCDatetimeScalar(buf/*, 1*/);
 					break;
 				default:
 					System.out.println("/!\\ type not managed yet in array: " + type);
@@ -339,6 +356,9 @@ public class MyBSONToOSONConverter {
 				case 19:
 					readDecimal128Field(buf/*, level + 1*/);
 					break;
+				case 9:
+					readUTCDatetimeField(buf/*, 1*/);
+					break;
 				default:
 					System.out.println("/!\\ type not managed yet in document: " + type);
 			}
@@ -393,6 +413,9 @@ public class MyBSONToOSONConverter {
 					break;
 				case 19:
 					readDecimal128Field(buf/*, level + 1*/);
+					break;
+				case 9:
+					readUTCDatetimeField(buf/*, 1*/);
 					break;
 				default:
 					System.out.println("/!\\ type not managed yet in document: " + type);
