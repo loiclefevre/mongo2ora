@@ -310,7 +310,7 @@
                         <buildArg>--gc=G1</buildArg>
                         <buildArg>-H:G1HeapRegionSize=32M</buildArg>
                         <buildArg>-H:-UseCompressedReferences</buildArg>
-                        <buildArg>-H:+NativeArchitecture</buildArg>
+                        <!-- buildArg>-H:+NativeArchitecture</buildArg -->
                         <buildArg>-H:+OptStringConcat</buildArg>
                         <buildArg>-H:-OutlineStringBuilderAppends</buildArg>
 			
@@ -319,9 +319,8 @@
 			<buildArg>-H:Debug=1</buildArg -->
 
                         <!-- Profile Guided Optimization, GraalVM EE only -->
-                        <buildArg>--pgo-instrument</buildArg>
-			            <!-- buildArg>- -pgo=../mongo2ora.iprof</buildArg -->
-			<!-- buildArg>- -pgo=${project.basedir}/mongo2ora.iprof</ibuildArg -->
+                        <!-- buildArg>- -pgo-instrument</buildArg -->
+			            <buildArg>--pgo=${project.basedir}/default.iprof</buildArg>
 
                         <!-- buildArg>-XX:+UnlockExperimentalVMOptions</buildArg>
                         <buildArg>-XX:G1MaxNewSizePercent=80</buildArg -->
