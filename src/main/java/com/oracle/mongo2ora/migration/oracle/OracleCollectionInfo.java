@@ -481,8 +481,8 @@ public class OracleCollectionInfo {
 							if ("?".equals(currentPKIndexStatus)) {
 								LOGGER.info("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
 								s.execute("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-								LOGGER.info("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
-								s.execute("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + user + "." + primaryKeyIndexName + " ENABLE NOVALIDATE");
+								LOGGER.info("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " +  primaryKeyIndexName + " ENABLE NOVALIDATE");
+								s.execute("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + primaryKeyIndexName + " ENABLE NOVALIDATE");
 								LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 							}
 						}
@@ -491,8 +491,8 @@ public class OracleCollectionInfo {
 						try {
 							LOGGER.info("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
 							s.execute("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-							LOGGER.info("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
-							s.execute("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX " + "PK_" + collectionName + " ENABLE NOVALIDATE");
+							LOGGER.info("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX PK_" + collectionName + " ENABLE NOVALIDATE");
+							s.execute("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX PK_" + collectionName + " ENABLE NOVALIDATE");
 							LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
 						}
 						catch (SQLException sqle) {
@@ -593,16 +593,6 @@ public class OracleCollectionInfo {
 									REPORT.getCollection(collectionName).getIndex(indexMetadata.getString("name")).indexCreationDurationInMS=System.currentTimeMillis()-start;
 								}
 								else if (is_IdPK(keys)) {
-									/*LOGGER.info("_id field index");
-									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [{\"path\": \"_id\", \"order\": \"%s\"}], \"unique\": true}", collectionName + "$" + indexMetadata.getString("name"), keys.getInteger("_id") == 1 ? "asc" : "desc");
-
-									LOGGER.info(indexSpec);
-									long start = System.currentTimeMillis();*/
-									gui.startIndex(indexMetadata.getString("name"));
-									/*sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
-									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));*/
-									gui.endIndex(indexMetadata.getString("name"), true);
-
 									for(IndexReport ir : REPORT.getCollection(collectionName).indexes) {
 										if(ir.type == IndexType.PRIMARY_KEY) {
 											s.execute("alter index "+(primaryKeyIndexName != null ? primaryKeyIndexName : "PK_"+collectionName)+" rename to \""+ collectionName + "$"+indexMetadata.getString("name")+"\"");

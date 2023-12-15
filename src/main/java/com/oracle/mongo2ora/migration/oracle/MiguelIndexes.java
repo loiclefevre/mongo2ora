@@ -45,7 +45,7 @@ public class MiguelIndexes {
 
 		try {
 			try (Statement s = c.createStatement()) {
-				final long rows = getNumberOfRows(oracleCollectionInfo, s);
+				final long rows = getNumberOfRows(oracleCollectionInfo, s, conf);
 
 				computeFieldsInfoFromDataGuide(oracleCollectionInfo, conf, oracleVersion, rows, fieldsInfo, s);
 
@@ -544,8 +544,10 @@ public class MiguelIndexes {
 		return keyTypes;
 	}
 
-	private static long getNumberOfRows(OracleCollectionInfo oracleCollectionInfo, Statement s) throws SQLException {
-		try (ResultSet r = s.executeQuery("select count(1) from \"" + oracleCollectionInfo.getTableName() + "\"")) {
+	private static long getNumberOfRows(OracleCollectionInfo oracleCollectionInfo, Statement s, Configuration conf) throws SQLException {
+		try (ResultSet r = s.executeQuery("select "+
+				(conf.maxSQLParallelDegree == -1 ? "/*+ parallel(c) */" : " /*+ parallel(c, "+ conf.maxSQLParallelDegree+") */")+
+				" count(1) from \"" + oracleCollectionInfo.getTableName() + "\" c")) {
 			if (r.next()) {
 				return r.getLong(1);
 			}
@@ -583,7 +585,7 @@ public class MiguelIndexes {
 		}
 		else {
 			LOGGER.info("Gathering Data Guide from " + oracleCollectionInfo.getCollectionName() + " on " + rows + " JSON documents...");
-			try (ResultSet r = s.executeQuery("with dg as (select json_object( 'dg' : json_dataguide( " + (conf.mongodbAPICompatible || oracleVersion >= 23 ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from \"" + oracleCollectionInfo.getTableName() + "\" /*where rownum <= 1000*/)\n" +
+			try (ResultSet r = s.executeQuery("with dg as (select "+(conf.maxSQLParallelDegree == -1 ? "/*+ parallel(c) */":"/*+ parallel(c, "+conf.maxSQLParallelDegree+") */")+" json_object( 'dg' : json_dataguide( " + (conf.mongodbAPICompatible || oracleVersion >= 23 ? "DATA" : "JSON_DOCUMENT") + ", dbms_json.format_flat, DBMS_JSON.GEOJSON+DBMS_JSON.GATHER_STATS) format JSON returning clob) as json_document from \"" + oracleCollectionInfo.getTableName() + "\" c /*where rownum <= 1000*/)\n" +
 					"select u.field_path, type, length, low, high from dg nested json_document columns ( nested dg[*] columns (field_path path '$.\"o:path\"', type path '$.type', length path '$.\"o:length\"', low path '$.\"o:low_value\"', high path '$.\"o:high_value\"' )) u")) {
 				while (r.next()) {
 					String path = r.getString(1);
