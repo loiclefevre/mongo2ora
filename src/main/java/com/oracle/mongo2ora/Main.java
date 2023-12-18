@@ -67,9 +67,8 @@ import static org.bson.MyBSONToOSONConverter.KEYS_SIZE;
 
 /**
  * TODO:
- * - summary at the end
- *   - add real table size
- * - add index size
+ * - fix ADB-S with wallet
+ * - look if native image can work on OCI Cloud Shell
  * - check free space before copying
  * select
  *    fs.tablespace_name                          "Tablespace",
@@ -97,6 +96,9 @@ import static org.bson.MyBSONToOSONConverter.KEYS_SIZE;
  * where
  *    df.tablespace_name = fs.tablespace_name;
  * <p>
+ * OK- summary at the end
+ *   OK - add real table size
+ *   OK - add index size
  * OK display index creation
  * OK work on Autonomous database detection and adapt with OSON support
  * OK work on Autonomous database detection and adapt with JSON datatype native support

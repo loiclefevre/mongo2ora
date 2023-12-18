@@ -602,19 +602,37 @@ public class OracleCollectionInfo {
 									}
 								}
 								else {
+									// Other "standard" index from a MongoDB database
 									LOGGER.info("Normal index");
-									final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getString("name"), getCreateIndexColumnsForMongoDBDatabase(collectionName, keys, fieldsInfo, oracleVersion),
+									String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getString("name"), getCreateIndexColumnsForMongoDBDatabase(collectionName, keys, fieldsInfo, oracleVersion),
 											indexMetadata.getBoolean("unique") == null ? "false" : indexMetadata.getBoolean("unique"));
 
-									LOGGER.info(indexSpec);
-									long start = System.currentTimeMillis();
-									gui.startIndex(indexMetadata.getString("name"));
-									sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
-									LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
-									gui.endIndex(indexMetadata.getString("name"), true);
-									REPORT.getCollection(collectionName).addIndex(collectionName + "$"+indexMetadata.getString("name"), keys.keySet().size() == 1 ? IndexType.SIMPLE : IndexType.COMPOUND);
-									REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getString("name")).numberOfFields = keys.keySet().size();
-									REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getString("name")).indexCreationDurationInMS=System.currentTimeMillis()-start;
+									if(indexSpec.contains("aRRaY")) {
+										indexSpec = indexSpec.replaceAll("aRRaY","");
+										indexSpec = indexSpec.substring(0,indexSpec.length()-1);
+										indexSpec = indexSpec + ", \"multivalue\": true}";
+										LOGGER.info(indexSpec);
+
+										long start = System.currentTimeMillis();
+										gui.startIndex(indexMetadata.getString("name"));
+										sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
+										LOGGER.info("Created multivalue SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+										gui.endIndex(indexMetadata.getString("name"), true);
+										REPORT.getCollection(collectionName).addIndex(collectionName + "$"+indexMetadata.getString("name"), IndexType.MULTIVALUE);
+										REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getString("name")).numberOfFields = keys.keySet().size();
+										REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getString("name")).indexCreationDurationInMS=System.currentTimeMillis()-start;
+									} else {
+										LOGGER.info(indexSpec);
+
+										long start = System.currentTimeMillis();
+										gui.startIndex(indexMetadata.getString("name"));
+										sodaCollection.admin().createIndex(db.createDocumentFromString(indexSpec));
+										LOGGER.info("Created standard SODA index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+										gui.endIndex(indexMetadata.getString("name"), true);
+										REPORT.getCollection(collectionName).addIndex(collectionName + "$"+indexMetadata.getString("name"), keys.keySet().size() == 1 ? IndexType.SIMPLE : IndexType.COMPOUND);
+										REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getString("name")).numberOfFields = keys.keySet().size();
+										REPORT.getCollection(collectionName).getIndex(collectionName + "$"+indexMetadata.getString("name")).indexCreationDurationInMS=System.currentTimeMillis()-start;
+									}
 								}
 							}
 						}
@@ -954,16 +972,15 @@ public class OracleCollectionInfo {
 			final FieldInfo fi = fieldsInfo.get("$." + columnName);
 
 			if (oracleVersion >= 23) {
-				s.append("{\"path\": \"").append(columnName).append("\", \"order\": \"").append(keys.getInteger(columnName) == 1 ? "asc" : "desc").append("\", \"datatype\": \"json\"}");
+				if(fi != null && fi.type.equals("array")) {
+					s.append("{\"path\": \"").append(columnName).append("\", \"order\": \"").append(keys.getInteger(columnName) == 1 ? "asc" : "desc").append("\" aRRaY}");
+				} else {
+					s.append("{\"path\": \"").append(columnName).append("\", \"order\": \"").append(keys.getInteger(columnName) == 1 ? "asc" : "desc").append("\", \"datatype\": \"json\"}");
+				}
 			}
 			else {
 				if (fi == null) {
-					if (oracleVersion >= 23) {
-						s.append("{\"path\": \"").append(columnName).append("\", \"order\": \"").append(keys.getInteger(columnName) == 1 ? "asc" : "desc").append("\", \"datatype\": \"json\"}");
-					}
-					else {
-						s.append("{\"path\": \"").append(columnName).append("\", \"order\": \"").append(keys.getInteger(columnName) == 1 ? "asc" : "desc").append("\"}");
-					}
+					s.append("{\"path\": \"").append(columnName).append("\", \"order\": \"").append(keys.getInteger(columnName) == 1 ? "asc" : "desc").append("\"}");
 				}
 				else {
 					s.append("{\"path\": \"").append(columnName).append("\", \"order\": \"").append(keys.getInteger(columnName) == 1 ? "asc" : "desc").append("\", \"datatype\": \"").append(fi.type).append("\"");

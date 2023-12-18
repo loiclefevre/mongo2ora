@@ -110,14 +110,11 @@ public class MyBSONToOSONConverter {
 						gen.writeEnd();
 						gen.close();
 						return;
+					case 1:
+						readDoubleField(buf/*, 1*/);
+						break;
 					case 2:
 						readStringField(buf/*, 1*/);
-						break;
-					case 9:
-						readUTCDatetimeField(buf/*, 1*/);
-						break;
-					case 7:
-						readObjectIdField(buf/*, 1*/);
 						break;
 					case 3:
 						readDocument(buf/*, 1*/);
@@ -125,8 +122,14 @@ public class MyBSONToOSONConverter {
 					case 4:
 						readArray(buf/*, 1*/);
 						break;
-					case 1:
-						readDoubleField(buf/*, 1*/);
+					case 7:
+						readObjectIdField(buf/*, 1*/);
+						break;
+					case 8:
+						readBooleanField(buf/*, level + 1*/);
+						break;
+					case 9:
+						readUTCDatetimeField(buf/*, 1*/);
 						break;
 					case 10:
 						readNullField(buf/*, 1*/);
@@ -136,9 +139,6 @@ public class MyBSONToOSONConverter {
 						break;
 					case 18:
 						readLongField(buf/*, 1*/);
-						break;
-					case 8:
-						readBooleanField(buf/*, level + 1*/);
 						break;
 					case 19:
 						readDecimal128Field(buf/*, level + 1*/);
@@ -151,12 +151,6 @@ public class MyBSONToOSONConverter {
 		catch(BufferUnderflowException bue) {
 			throw new RuntimeException("Error converting BSON to OSON:\n"+doc.toJson(), bue);
 		}
-
-		//System.out.println(doc);
-/*		reader.reset(doc);
-		writer.reset(allowDuplicateKeys, relativeOffsets, lastValueSharing, simpleValueSharing);
-		writer.pipe(reader);
-		bsonLength = reader.getBsonInput().getPosition();*/
 	}
 
 	private void readUTCDatetimeField(final ByteBuffer buf/*, int level*/) {
@@ -596,7 +590,6 @@ public class MyBSONToOSONConverter {
 		for (int b = 0; b < ONE_BYTE_ASCII_STRINGS.length; ++b) {
 			ONE_BYTE_ASCII_STRINGS[b] = String.valueOf((char) b);
 		}
-
 	}
 
 	private final byte[] readStringBuffer = new byte[1024 * 1024];
@@ -682,19 +675,6 @@ public class MyBSONToOSONConverter {
 		o.close();
 
 		System.out.println(dec.getOid()+", "+dec.getKeysSize()+", "+dec.getBsonLength()+", "+dec.getOSONData());
-
-
-		MyBSONDecoder decOld = new MyBSONDecoder(true, true, true, true, true);
-
-		/*for(int i = 0; i < 20000; i++) {
-			decOld.convertBSONToOSON(raw);
-		}*/
-
-		start = System.nanoTime();
-		decOld.convertBSONToOSON(raw);
-		end = System.nanoTime();
-		System.out.println("Old duration="+(end-start));
-
 
 	}
 }
