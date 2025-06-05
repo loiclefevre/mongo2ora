@@ -353,6 +353,9 @@ public class MyBSONToOSONConverter {
 				case 9:
 					readUTCDatetimeField(buf/*, 1*/);
 					break;
+				case 7:
+					readObjectIdField(buf/*, 1*/);
+					break;
 				default:
 					System.out.println("/!\\ type not managed yet in document: " + type);
 			}
@@ -411,8 +414,11 @@ public class MyBSONToOSONConverter {
 				case 9:
 					readUTCDatetimeField(buf/*, 1*/);
 					break;
+				case 7:
+					readObjectIdField(buf/*, 1*/);
+					break;
 				default:
-					System.out.println("/!\\ type not managed yet in document: " + type);
+					System.out.println("/!\\ type not managed yet in document in array: " + type);
 			}
 		}
 
