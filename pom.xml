@@ -153,7 +153,11 @@
                 <exclusion>
                     <groupId>com.oracle.database.observability</groupId>
                     <artifactId>*</artifactId>
-                </exclusion>
+	    	</exclusion>
+		<exclusion>
+			<groupId>com.oracle.database.jps</groupId>
+			<artifactId>*</artifactId>
+		</exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -389,10 +393,25 @@
                         <buildArg>-H:EnableURLProtocols=https</buildArg>
                         <buildArg>-H:ConfigurationFileDirectories=../src/main/resources/META-INF/native-image</buildArg>
                         <buildArg>-H:-CheckToolchain</buildArg>
-                        <buildArg>--initialize-at-build-time=sun.instrument.InstrumentationImpl</buildArg>
+			<buildArg>--initialize-at-build-time=sun.instrument.InstrumentationImpl</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.OraCharsetWithConverter</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.OraCharsetAL16UTF16</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.OraCharsetUTFE</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.OraCharsetUTF</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.converter.CharacterConverter1Byte</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.OraCharsetAL32UTF8</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.converter.CharacterConverter12Byte</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.converter.CharacterConverterJAEUC</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.sql.CharacterSetFactoryDefault</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.converter.CharacterConverterShift</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.converter.CharacterConverterGB18030</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.converter.CharacterConverterGBK</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.converter.CharacterConverterSJIS</buildArg>
+			<buildArg>--initialize-at-build-time=oracle.i18n.text.converter.CharacterConverterZHTEUC</buildArg>
+			
                         <!-- buildArg>-initialize-at-run-time=oracle.dms.console.DMSConsole</buildArg -->
-                        <buildArg>--features=oracle.nativeimage.CharacterSetFeature</buildArg>
-                        <buildArg>--features=oracle.nativeimage.NativeImageFeature</buildArg>
+                        <!-- buildArg>- -features=oracle.nativeimage.CharacterSetFeature</buildArg -->
+                        <!-- buildArg>- -features=oracle.nativeimage.NativeImageFeature</buildArg -->
                         <buildArg>--trace-class-initialization=oracle.sql.CharacterSet</buildArg>
                         <buildArg>--initialize-at-build-time=oracle.sql.CharacterSet</buildArg>
                         <buildArg>--initialize-at-build-time=oracle.sql.ConverterArchive</buildArg>
