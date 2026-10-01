@@ -1,8 +1,7 @@
 package com.oracle.mongo2ora.migration;
 
-import com.mongodb.diagnostics.logging.Logger;
-import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.Main;
+import com.oracle.mongo2ora.reporting.LoadingReport;
 import net.rubygrapefruit.platform.terminal.TerminalOutput;
 import oracle.ucp.jdbc.PoolDataSource;
 
@@ -17,9 +16,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Configuration {
-	private static final Logger LOGGER = Loggers.getLogger("Configuration");
+	private static final Logger LOGGER = LoggerFactory.getLogger("Configuration");
 	public boolean dropAlreadyExistingCollection;
 	public String source;
 	public String destination;
@@ -52,6 +53,7 @@ public class Configuration {
 	public boolean mongodbAPICompatible;
 	public boolean forceOSON;
 	public boolean skipSecondaryIndexes;
+	public boolean skipPKIndexes;
 	public boolean buildSecondaryIndexes;
 
 	public long samples = -1;
@@ -68,8 +70,9 @@ public class Configuration {
 	public boolean compressedOSON;
 	public int compressionLevel = 0;
 	public boolean acoEnabled;
+	public boolean nativeJSONCollection;
 
-	public static Configuration prepareConfiguration(String[] args) {
+	public static Configuration prepareConfiguration(LoadingReport report, String[] args) {
 		Configuration conf = new Configuration();
 
 		for (int i = 0; i < args.length; i++) {
@@ -81,6 +84,10 @@ public class Configuration {
 
 				case "--miguel-indexes":
 					conf.buildIndexesLikeMiguel = true;
+				break;
+
+				case "--native-json-collection":
+					conf.nativeJSONCollection = true;
 				break;
 
 				case "--compress":
@@ -96,10 +103,13 @@ public class Configuration {
 						switch(conf.compressionLevel) {
 							case 1:
 								conf.relativeOffsets = true;
-								conf.simpleValueSharing = true;
 								break;
 
 							case 2:
+								conf.relativeOffsets = true;
+								conf.simpleValueSharing = true;
+								break;
+
 							case 3:
 								conf.relativeOffsets = true;
 								conf.simpleValueSharing = true;
@@ -126,6 +136,10 @@ public class Configuration {
 					}
 					break;
 
+				case "--internal":
+					report.internal = true;
+					break;
+
 				case "--mongodbapi":
 				case "--mongodb-api":
 					conf.mongodbAPICompatible = true;
@@ -141,6 +155,10 @@ public class Configuration {
 
 				case "--skip-secondary-indexes":
 					conf.skipSecondaryIndexes = true;
+					break;
+
+				case "--skip-pk-indexes":
+					conf.skipPKIndexes = true;
 					break;
 
 				case "-s":
@@ -248,7 +266,7 @@ public class Configuration {
 					break;
 
 				default:
-					LOGGER.warn("Unknown CLI parameter '"+arg+"'");
+                    LOGGER.info("Unknown CLI parameter '{}'", arg);
 					displayUsage("Unknown CLI parameter '"+arg+"'");
 			}
 		}
@@ -260,12 +278,15 @@ public class Configuration {
 			Configuration.displayUsage("Incompatible choices: for a MongoDB dump, you usually don't want to drop collections when asking to rebuild solely the secondary indexes!");
 		}
 
+		LOGGER.info("Finished parsing command line arguments.");
+
 		return conf;
 	}
 
 	public Configuration() {
 		try {
 			collectionsProperties.load(new FileInputStream("mongo2ora.properties"));
+			LOGGER.info("Loaded properties from file mongo2ora.properties");
 		}
 		catch (IOException ignored) {
 		}
@@ -365,6 +386,7 @@ public class Configuration {
 				//.write("-a [description]: generate AWR report for Oracle database with optional description (requires Diagnostic Pack for on-premises)").newline()
 				.write("-c <comma-separated list of collection name(s)>: migrate only the selected collection(s)").newline()
 				.write("--drop: drop existing collection(s) from the destination database (before recreating it if needed)").newline()
+				.write("--skip-pk-indexes: don't create primary key indexes").newline()
 				.write("--skip-secondary-indexes: don't create secondary indexes (only for mongodumps)").newline()
 				.write("--build-secondary-indexes: don't load data, only create secondary indexes (only for mongodumps)").newline()
 				.write("--mongodb-api: makes collection(s) compatible to work with the Oracle Database API for MongoDB").newline()

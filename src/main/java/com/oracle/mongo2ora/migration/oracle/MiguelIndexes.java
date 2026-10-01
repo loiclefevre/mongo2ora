@@ -3,8 +3,6 @@ package com.oracle.mongo2ora.migration.oracle;
 import com.fasterxml.jackson.core.exc.StreamReadException;
 import com.fasterxml.jackson.databind.DatabindException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mongodb.diagnostics.logging.Logger;
-import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.Configuration;
 import com.oracle.mongo2ora.migration.mongodb.IndexColumn;
@@ -28,14 +26,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import static com.oracle.mongo2ora.Main.MAX_STRING_SIZE;
 import static com.oracle.mongo2ora.Main.REPORT;
 import static com.oracle.mongo2ora.migration.oracle.MiguelIndexes.PathType.ARRAY;
 import static com.oracle.mongo2ora.migration.oracle.MiguelIndexes.PathType.OTHER;
 
 public class MiguelIndexes {
-	private static final Logger LOGGER = Loggers.getLogger("Miguel indexes");
+	private static final Logger LOGGER = LoggerFactory.getLogger("Miguel indexes");
 
 	// source: https://github.com/oracle/json-in-db/blob/master/MigrationTools/IndexParser/ora_idx_parser.body.sql
 	public static void build(OracleCollectionInfo oracleCollectionInfo, Connection c, Configuration conf, MetadataIndex[] indexes, int oracleVersion, ASCIIGUI gui) {
@@ -124,7 +123,7 @@ public class MiguelIndexes {
 						if (mi.isTtl()) {
 							// TODO
 							//LOGGER.info("Create TTL index ...");
-							LOGGER.warn("/!\\ TTL index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + ", this feature is coming soon in mongo2ora..");
+							LOGGER.info("/!\\ TTL index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + ", this feature is coming soon in mongo2ora..");
 						}
 						else if (isMaterializedViewBasedIndex) {
 							LOGGER.info("Create materialized view based index ...");
@@ -142,27 +141,27 @@ public class MiguelIndexes {
 						gui.startIndex(mi.getName());
 
 						if (!allFieldTypesKnown) {
-							LOGGER.warn("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since we don't know about the type of some field(s)");
+							LOGGER.info("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since we don't know about the type of some field(s)");
 						}
 
 						if (!noMultiTypeField) {
-							LOGGER.warn("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since some field(s) have multiple types.");
+							LOGGER.info("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since some field(s) have multiple types.");
 						}
 
 						if (!noObjectTypeField) {
-							LOGGER.warn("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since some field(s) have an object type.");
+							LOGGER.info("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since some field(s) have an object type.");
 						}
 
 						if (!noOrphanArrayTypeField) {
-							LOGGER.warn("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since some field(s) have an array type but no documents were found matching this.");
+							LOGGER.info("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since some field(s) have an array type but no documents were found matching this.");
 						}
 
 						if (!noParallelArrays) {
-							LOGGER.warn("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since at least 2 paths have distinct parallel arrays!");
+							LOGGER.info("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since at least 2 paths have distinct parallel arrays!");
 						}
 
 						if (!rightMaxStringSizeForMVBasedIndex) {
-							LOGGER.warn("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since it requires a materialized view that can't be created because max_string_size parameter value is not EXTENDED!");
+							LOGGER.info("/!\\ Index " + mi.getName() + " will NOT be created on collection " + oracleCollectionInfo.getCollectionName() + " since it requires a materialized view that can't be created because max_string_size parameter value is not EXTENDED!");
 						}
 
 						gui.endIndex(mi.getName(), false);
@@ -228,7 +227,7 @@ public class MiguelIndexes {
 			// TODO disable parallel index?
 		}
 		catch (SQLException sqle) {
-			LOGGER.error("Creating index on materialized view! ", sqle);
+			LOGGER.error("Creating index on materialized view!", sqle);
 
 			gui.endIndex(mi.getName(), false);
 			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).addFailedIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName()), mi.getKey().getNumberOfFields() > 1 ? IndexType.COMPOUND_MV : IndexType.SIMPLE_MV);
@@ -301,7 +300,7 @@ public class MiguelIndexes {
 			return new BuildMVStatus(true, System.currentTimeMillis()-start);
 		}
 		catch (SQLException sqle) {
-			LOGGER.error("Creating materialized view for index! ", sqle);
+			LOGGER.error("Creating materialized view for index!", sqle);
 			gui.endIndex(mi.getName(), false);
 			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).addFailedIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName()), mi.getKey().getNumberOfFields() > 1 ? IndexType.COMPOUND : IndexType.SIMPLE);
 			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).getFailedIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName())).numberOfFields = mi.getKey().getNumberOfFields();
@@ -334,7 +333,7 @@ public class MiguelIndexes {
 					LOGGER.error("Indexed field is an object!");
 					break;
 				case "array":
-					LOGGER.warn("Detected array in JSON Path => recursive call...");
+					LOGGER.info("Detected array in JSON Path => recursive call...");
 					getMVJSONPathsRecursiveArray(s, level + 1, path, pathWalker.getRemainingSubPath(), keyTypes, keyFieldInfoPathMap);
 					break;
 				default:
@@ -424,7 +423,7 @@ public class MiguelIndexes {
 			// TODO disable parallel index?
 		}
 		catch (SQLException sqle) {
-			LOGGER.error("Creating index! ", sqle);
+			LOGGER.error("Creating index!", sqle);
 			gui.endIndex(mi.getName(), false);
 			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).addFailedIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName()), mi.getKey().getNumberOfFields() > 1 ? IndexType.COMPOUND : IndexType.SIMPLE);
 			REPORT.getCollection(oracleCollectionInfo.getCollectionName()).getFailedIndex(String.format("%s$%s", oracleCollectionInfo.getTableName(), mi.getName())).numberOfFields = mi.getKey().getNumberOfFields();
@@ -534,7 +533,7 @@ public class MiguelIndexes {
 			final String key = "$._id".equals(fi.path) ? "_id" : fi.path.substring(2).replaceAll("\\\"", "");
 			if (keyTypes.containsKey(key)) {
 				keyTypes.put(key, "multitype");
-				LOGGER.warn("Field " + key + " has multiple types!");
+				LOGGER.info("Field " + key + " has multiple types!");
 			}
 			else {
 				keyTypes.put(key, fi.type);
@@ -560,7 +559,7 @@ public class MiguelIndexes {
 	private static void computeFieldsInfoFromDataGuide(OracleCollectionInfo oracleCollectionInfo, Configuration conf, int oracleVersion, long rows, Map<String, OracleCollectionInfo.FieldInfo> fieldsInfo, Statement s) throws SQLException {
 		final File dataGuideFile = new File(conf.sourceDumpFolder, oracleCollectionInfo.getCollectionName() + ".dataguide." + rows + ".json");
 
-		LOGGER.warn("Now building indexes, the larger the collection, the longer the process!");
+		LOGGER.info("Now building indexes, the larger the collection, the longer the process!");
 		if (dataGuideFile.exists()) {
 			LOGGER.info("Found existing Data Guide for " + oracleCollectionInfo.getCollectionName() + " with matching number of JSON documents (" + rows + "), reloading it!");
 
@@ -704,7 +703,7 @@ public class MiguelIndexes {
 									return;
 
 								case "array":
-									//LOGGER.warn("Detected array in JSON Path => recursive call...");
+									//LOGGER.info("Detected array in JSON Path => recursive call...");
 									if (!childrenMap.containsKey(path)) {
 										RecursivePart array = new RecursivePart(path, "array", level + 1);
 										array.initialize(columns, keyTypes);
@@ -738,7 +737,7 @@ public class MiguelIndexes {
 								return;
 
 							case "array":
-								//LOGGER.warn("Detected array in JSON Path => recursive call...");
+								//LOGGER.info("Detected array in JSON Path => recursive call...");
 								if (!childrenMap.containsKey(path)) {
 									RecursivePart array = new RecursivePart(path, "array", level + 1);
 									array.initialize(columns, keyTypes);

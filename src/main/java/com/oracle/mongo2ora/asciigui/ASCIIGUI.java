@@ -1,8 +1,6 @@
 package com.oracle.mongo2ora.asciigui;
 
 import com.mongodb.client.MongoCollection;
-import com.mongodb.diagnostics.logging.Logger;
-import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.migration.CollectionIndexesInfo;
 import com.oracle.mongo2ora.migration.mongodb.MongoDBMetadata;
 import com.oracle.mongo2ora.util.XYTerminalOutput;
@@ -20,11 +18,13 @@ import java.util.Date;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static com.oracle.mongo2ora.util.XYTerminalOutput.BrightRed;
 
 public class ASCIIGUI extends TimerTask {
-	private static final Logger LOGGER = Loggers.getLogger("gui");
+	private static final Logger LOGGER = LoggerFactory.getLogger("gui");
 
 	private final String title;
 	private String sourceDatabase;
@@ -311,7 +311,7 @@ public class ASCIIGUI extends TimerTask {
 				}
 			}
 			catch (SQLException ignored) {
-				LOGGER.error("Updating counters",ignored);
+				LOGGER.error("Updating counters", ignored);
 			}
 		}
 //		if (getPds() != null) {

@@ -5,31 +5,8 @@ import com.mongodb.ReadConcern;
 import com.mongodb.ReadPreference;
 import com.mongodb.WriteConcern;
 import com.mongodb.bulk.BulkWriteResult;
-import com.mongodb.client.AggregateIterable;
-import com.mongodb.client.ChangeStreamIterable;
-import com.mongodb.client.ClientSession;
-import com.mongodb.client.DistinctIterable;
-import com.mongodb.client.FindIterable;
-import com.mongodb.client.ListIndexesIterable;
-import com.mongodb.client.MapReduceIterable;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.model.BulkWriteOptions;
-import com.mongodb.client.model.CountOptions;
-import com.mongodb.client.model.CreateIndexOptions;
-import com.mongodb.client.model.DeleteOptions;
-import com.mongodb.client.model.DropIndexOptions;
-import com.mongodb.client.model.EstimatedDocumentCountOptions;
-import com.mongodb.client.model.FindOneAndDeleteOptions;
-import com.mongodb.client.model.FindOneAndReplaceOptions;
-import com.mongodb.client.model.FindOneAndUpdateOptions;
-import com.mongodb.client.model.IndexModel;
-import com.mongodb.client.model.IndexOptions;
-import com.mongodb.client.model.InsertManyOptions;
-import com.mongodb.client.model.InsertOneOptions;
-import com.mongodb.client.model.RenameCollectionOptions;
-import com.mongodb.client.model.ReplaceOptions;
-import com.mongodb.client.model.UpdateOptions;
-import com.mongodb.client.model.WriteModel;
+import com.mongodb.client.*;
+import com.mongodb.client.model.*;
 import com.mongodb.client.result.DeleteResult;
 import com.mongodb.client.result.InsertManyResult;
 import com.mongodb.client.result.InsertOneResult;
@@ -40,6 +17,7 @@ import org.bson.conversions.Bson;
 
 import java.io.File;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class MongoCollectionDump<TDocument> implements MongoCollection<TDocument> {
 	public final File sourceDumpFolder;
@@ -84,6 +62,11 @@ public class MongoCollectionDump<TDocument> implements MongoCollection<TDocument
 	}
 
 	@Override
+	public Long getTimeout(TimeUnit timeUnit) {
+		return 0L;
+	}
+
+	@Override
 	public <NewTDocument> MongoCollection<NewTDocument> withDocumentClass(Class<NewTDocument> aClass) {
 		return null;
 	}
@@ -105,6 +88,11 @@ public class MongoCollectionDump<TDocument> implements MongoCollection<TDocument
 
 	@Override
 	public MongoCollection<TDocument> withReadConcern(ReadConcern readConcern) {
+		return null;
+	}
+
+	@Override
+	public MongoCollection<TDocument> withTimeout(long l, TimeUnit timeUnit) {
 		return null;
 	}
 
@@ -576,6 +564,51 @@ public class MongoCollectionDump<TDocument> implements MongoCollection<TDocument
 	@Override
 	public void drop(ClientSession clientSession) {
 
+	}
+
+	@Override
+	public void drop(DropCollectionOptions dropCollectionOptions) {
+
+	}
+
+	@Override
+	public void drop(ClientSession clientSession, DropCollectionOptions dropCollectionOptions) {
+
+	}
+
+	@Override
+	public String createSearchIndex(String s, Bson bson) {
+		return "";
+	}
+
+	@Override
+	public String createSearchIndex(Bson bson) {
+		return "";
+	}
+
+	@Override
+	public List<String> createSearchIndexes(List<SearchIndexModel> list) {
+		return List.of();
+	}
+
+	@Override
+	public void updateSearchIndex(String s, Bson bson) {
+
+	}
+
+	@Override
+	public void dropSearchIndex(String s) {
+
+	}
+
+	@Override
+	public ListSearchIndexesIterable<Document> listSearchIndexes() {
+		return null;
+	}
+
+	@Override
+	public <TResult> ListSearchIndexesIterable<TResult> listSearchIndexes(Class<TResult> aClass) {
+		return null;
 	}
 
 	@Override

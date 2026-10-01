@@ -7,13 +7,7 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.mongodb.ReadConcern;
 import com.mongodb.ReadPreference;
 import com.mongodb.WriteConcern;
-import com.mongodb.client.AggregateIterable;
-import com.mongodb.client.ChangeStreamIterable;
-import com.mongodb.client.ClientSession;
-import com.mongodb.client.ListCollectionsIterable;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
-import com.mongodb.client.MongoIterable;
+import com.mongodb.client.*;
 import com.mongodb.client.model.CreateCollectionOptions;
 import com.mongodb.client.model.CreateViewOptions;
 import org.bson.Document;
@@ -27,6 +21,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
 
@@ -65,6 +60,11 @@ public class MongoDatabaseDump implements MongoDatabase {
 	}
 
 	@Override
+	public Long getTimeout(TimeUnit timeUnit) {
+		return 0L;
+	}
+
+	@Override
 	public MongoDatabase withCodecRegistry(CodecRegistry codecRegistry) {
 		return null;
 	}
@@ -81,6 +81,11 @@ public class MongoDatabaseDump implements MongoDatabase {
 
 	@Override
 	public MongoDatabase withReadConcern(ReadConcern readConcern) {
+		return null;
+	}
+
+	@Override
+	public MongoDatabase withTimeout(long l, TimeUnit timeUnit) {
 		return null;
 	}
 
@@ -145,7 +150,7 @@ public class MongoDatabaseDump implements MongoDatabase {
 	}
 
 	@Override
-	public MongoIterable<String> listCollectionNames() {
+	public ListCollectionNamesIterable listCollectionNames() {
 		return null;
 	}
 
@@ -172,7 +177,7 @@ public class MongoDatabaseDump implements MongoDatabase {
 	}
 
 	@Override
-	public MongoIterable<String> listCollectionNames(ClientSession clientSession) {
+	public ListCollectionNamesIterable listCollectionNames(ClientSession clientSession) {
 		return null;
 	}
 

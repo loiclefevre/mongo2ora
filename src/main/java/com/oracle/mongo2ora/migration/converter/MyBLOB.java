@@ -1,7 +1,6 @@
 package com.oracle.mongo2ora.migration.converter;
 
-import com.mongodb.diagnostics.logging.Logger;
-import com.mongodb.diagnostics.logging.Loggers;
+import oracle.jdbc.ErrorSet;
 import oracle.jdbc.LargeObjectAccessMode;
 import oracle.jdbc.OracleConnection;
 import oracle.jdbc.internal.OracleBlob;
@@ -21,10 +20,9 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.Calendar;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
 
 public class MyBLOB implements OracleBlob {
-	private static final Logger LOGGER = Loggers.getLogger("MyBLOB");
-
 	private byte[] data;
 
 	public MyBLOB(final byte[] data) {
@@ -33,65 +31,54 @@ public class MyBLOB implements OracleBlob {
 
 	@Override
 	public long length() throws SQLException {
-		LOGGER.warn("length()");
 		return data.length;
 	}
 
 	@Override
 	public byte[] getBytes(long pos, int length) throws SQLException {
-		LOGGER.warn("public byte[] getBytes(long pos, int length) throws SQLException");
 		return new byte[0];
 	}
 
 	@Override
 	public InputStream getBinaryStream() throws SQLException {
-		LOGGER.warn("public InputStream getBinaryStream() throws SQLException");
 		return new ByteArrayInputStream(data);
 	}
 
 	@Override
 	public long position(byte[] pattern, long start) throws SQLException {
-		LOGGER.warn("public long position(byte[] pattern, long start) throws SQLException");
 		return 0;
 	}
 
 	@Override
 	public long position(Blob pattern, long start) throws SQLException {
-		LOGGER.warn("public long position(Blob pattern, long start) throws SQLException");
 		return 0;
 	}
 
 	@Override
 	public int setBytes(long pos, byte[] bytes) throws SQLException {
-		LOGGER.warn("public int setBytes(long pos, byte[] bytes) throws SQLException");
 		return 0;
 	}
 
 	@Override
 	public int setBytes(long pos, byte[] bytes, int offset, int len) throws SQLException {
-		LOGGER.warn("public int setBytes(long pos, byte[] bytes, int offset, int len) throws SQLException");
 		return 0;
 	}
 
 	@Override
 	public OutputStream setBinaryStream(long pos) throws SQLException {
-		LOGGER.warn("public OutputStream setBinaryStream(long pos) throws SQLException");
 		return null;
 	}
 
 	@Override
 	public void truncate(long len) throws SQLException {
-		LOGGER.warn("public void truncate(long len) throws SQLException");
 	}
 
 	@Override
 	public void free() throws SQLException {
-		LOGGER.warn("public void free() throws SQLException");
 	}
 
 	@Override
 	public InputStream getBinaryStream(long pos, long length) throws SQLException {
-		LOGGER.warn("public InputStream getBinaryStream(long pos, long length) throws SQLException");
 		return null;
 	}
 
@@ -346,17 +333,30 @@ public class MyBLOB implements OracleBlob {
 	}
 
 	@Override
-	public void open(LargeObjectAccessMode largeObjectAccessMode) throws SQLException {
-
+	public Flow.Publisher<byte[]> publisherOracle(long position) throws SQLException {
+		return OracleBlob.super.publisherOracle(position);
 	}
 
 	@Override
-	public void close() throws SQLException {
-
+	public Flow.Subscriber<byte[]> subscriberOracle(long position) throws SQLException {
+		return OracleBlob.super.subscriberOracle(position);
 	}
 
 	@Override
-	public boolean isOpen() throws SQLException {
+	public Flow.Subscriber<byte[]> subscriberOracle(long position, Flow.Subscriber<Long> outcomeSubscriber) throws SQLException {
+		return OracleBlob.super.subscriberOracle(position, outcomeSubscriber);
+	}
+
+	@Override
+	public void openLob(LargeObjectAccessMode mode) throws SQLException {
+	}
+
+	@Override
+	public void closeLob() throws SQLException {
+	}
+
+	@Override
+	public boolean isOpenLob() throws SQLException {
 		return false;
 	}
 
@@ -422,6 +422,26 @@ public class MyBLOB implements OracleBlob {
 
 	@Override
 	public SQLXML toSQLXML(int i) throws SQLException {
+		return null;
+	}
+
+	@Override
+	public Flow.Publisher<byte[]> publisherOracle(long position, ErrorSet continueOnErrorSet) throws SQLException {
+		return null;
+	}
+
+	@Override
+	public Flow.Subscriber<byte[]> subscriberOracle(long position, ErrorSet continueOnErrorSet) throws SQLException {
+		return null;
+	}
+
+	@Override
+	public Flow.Subscriber<byte[]> subscriberOracle(long position, Flow.Subscriber<Long> outcomeSubscriber, ErrorSet continueOnErrorSet) throws SQLException {
+		return null;
+	}
+
+	@Override
+	public Flow.Publisher<Void> freeAsyncOracle() throws SQLException {
 		return null;
 	}
 

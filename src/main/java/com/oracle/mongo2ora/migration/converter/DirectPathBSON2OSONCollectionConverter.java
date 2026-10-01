@@ -4,8 +4,6 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
-import com.mongodb.diagnostics.logging.Logger;
-import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.ConversionInformation;
 import com.oracle.mongo2ora.migration.mongodb.CollectionCluster;
@@ -18,16 +16,16 @@ import org.bson.RawBsonDocument;
 import java.io.ByteArrayInputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.util.EnumSet;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import static com.oracle.mongo2ora.migration.mongodb.CollectionClusteringAnalyzer.useIdIndexHint;
 
 public class DirectPathBSON2OSONCollectionConverter implements Runnable {
-	private static final Logger LOGGER = Loggers.getLogger("converter");
+	private static final Logger LOGGER = LoggerFactory.getLogger("converter");
 	private final Semaphore DB_SEMAPHORE;
 
 	private final CollectionCluster work;

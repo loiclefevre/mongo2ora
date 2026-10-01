@@ -2,8 +2,6 @@ package com.oracle.mongo2ora.migration.oracle;
 
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
-import com.mongodb.diagnostics.logging.Logger;
-import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.Configuration;
 import com.oracle.mongo2ora.migration.mongodb.IndexColumn;
@@ -30,16 +28,18 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import static com.oracle.mongo2ora.Main.REPORT;
 import static com.oracle.mongo2ora.util.Tools.getDurationSince;
 
 public class OracleCollectionInfo {
-	private static final Logger LOGGER = Loggers.getLogger("index");
+	private static final Logger LOGGER = LoggerFactory.getLogger("index");
 
 	private final String user;
-	private final String collectionName;
+	public final String collectionName;
 	private final boolean autonomousDatabase;
+	private CollectionType type = CollectionType.SODA;
 
 	private String tableName;
 	private boolean mixedCase;
@@ -95,82 +95,126 @@ public class OracleCollectionInfo {
 		}
 	}
 
-	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, Configuration conf, String collectionName, boolean autonomousDatabase)
-			throws SQLException, OracleException {
-		final String user = conf.destinationUsername.toUpperCase();
+	static boolean manageNativeJSONCollection(Connection c, Connection userConnection, OracleCollectionInfo ret, Configuration conf) throws SQLException {
 		final boolean dropAlreadyExistingCollection = conf.dropAlreadyExistingCollection;
 		final boolean mongoDBAPICompatible = conf.mongodbAPICompatible;
 		final boolean forceOSON = conf.forceOSON;
 		final boolean buildSecondaryIndexes = conf.buildSecondaryIndexes;
-		final Properties collectionsProperties = conf.collectionsProperties;
 
-		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName, autonomousDatabase);
+		REPORT.getCollection(ret.collectionName).mongoDBAPICompatible = mongoDBAPICompatible;
+		REPORT.getCollection(ret.collectionName).type = ret.type;
 
-		try (Connection c = adminPDS.getConnection()) {
-			try (Connection userConnection = pds.getConnection()) {
-				// SODA: ensure the collection do exists!
-				final Properties props = new Properties();
-				props.put("oracle.soda.sharedMetadataCache", "true");
-				props.put("oracle.soda.localMetadataCache", "true");
+		ret.emptyDestinationCollection = true;
 
-				final OracleRDBMSClient cl = new OracleRDBMSClient(props);
-				final OracleDatabase db = cl.getDatabase(userConnection);
-				OracleCollection sodaCollection = db.openCollection(ret.collectionName);
-
-				REPORT.getCollection(collectionName).mongoDBAPICompatible = mongoDBAPICompatible;
-
-				ret.emptyDestinationCollection = true;
-
-				if (sodaCollection == null) {
-					LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does not exist => creating it");
-					sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON, collectionsProperties) : createClassicCollection(db, ret.collectionName, forceOSON);
-					if (sodaCollection == null) {
-						throw new IllegalStateException("Can't create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
-					}
-					else {
-						ret.retrieveTableName(userConnection);
-					}
-				}
-				else {
-					ret.retrieveTableName(userConnection);
-
-					try (Statement s = userConnection.createStatement()) {
-						try (ResultSet r = s.executeQuery("select count(1) from \"" + ret.tableName + "\" where rownum = 1")) {
-							if (r.next() && r.getInt(1) == 1) {
+		try (PreparedStatement p = userConnection.prepareStatement("select collection_type from USER_json_COLLECTIONS where owner=? and collection_name=? union select 'TABLE' from user_tables where table_name=?")) {
+			p.setString(1, ret.user);
+			p.setString(2, ret.collectionName.toUpperCase());
+			p.setString(3, ret.collectionName.toUpperCase());
+			try(ResultSet r = p.executeQuery()) {
+				if(r.next()) {
+					// collection exist
+					// is it a table?
+					final String collectionType = r.getString(1);
+					if(!collectionType.equalsIgnoreCase("TABLE")) {
+						LOGGER.warn("Native JSON collection "+ret.collectionName+" already exist and is of type "+collectionType+", skipping this collection!");
+						return false;
+					} else {
+						// table already exist!
+						ret.tableName = ret.collectionName.toUpperCase();
+						REPORT.getCollection(ret.collectionName).tableName = ret.tableName;
+						try (ResultSet rEmpty = p.executeQuery("select count(1) from \"" + ret.tableName + "\" where rownum = 1")) {
+							if (rEmpty.next() && rEmpty.getInt(1) == 1) {
 								// THERE IS AT LEAST ONE ROW!
 								if (dropAlreadyExistingCollection) {
-									LOGGER.warn((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => dropping it (requested with --drop CLI argument)");
-									sodaCollection.admin().drop();
-									REPORT.getCollection(collectionName).wasDropped = true;
-									LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
-									// TODO manage contentColumn data type:
-									// TODO 21c+ => JSON
-									// TODO 19c => BLOB if not autonomous database and not mongodb api compatible
-									// TODO 19c => BLOB OSON if autonomous database or not mongodb api compatible
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON, collectionsProperties) : createClassicCollection(db, ret.collectionName, forceOSON);
-									if (sodaCollection == null) {
-										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
-									}
-								}
-								else {
-									// avoid migrating data into non empty destination collection (no conflict to manage)
+									p.executeUpdate("drop table " + ret.tableName + " purge");
+									p.execute("create json collection table "+ret.collectionName);
+								} else {
 									ret.emptyDestinationCollection = buildSecondaryIndexes;
-									return ret;
-								}
-							}
-							else {
-								if (dropAlreadyExistingCollection) {
-									LOGGER.warn((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
-									sodaCollection.admin().drop();
-									REPORT.getCollection(collectionName).wasDropped = true;
-									LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
-									sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON, collectionsProperties) : createClassicCollection(db, ret.collectionName, forceOSON);
-									if (sodaCollection == null) {
-										throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
-									}
+									return false;
 								}
 							}
 						}
+					}
+				} else {
+					// does not exist as a native json collection table hence create it!
+					// it may fail if the table exists but is not a json collection table!
+					p.execute("create json collection table "+ret.collectionName);
+
+					ret.tableName = ret.collectionName.toUpperCase();
+					REPORT.getCollection(ret.collectionName).tableName = ret.tableName;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	static boolean manageSODACollection(Connection c, Connection userConnection, OracleCollectionInfo ret, Configuration conf) throws OracleException, SQLException {
+		final boolean dropAlreadyExistingCollection = conf.dropAlreadyExistingCollection;
+		final boolean mongoDBAPICompatible = conf.mongodbAPICompatible;
+		final boolean forceOSON = conf.forceOSON;
+		final boolean buildSecondaryIndexes = conf.buildSecondaryIndexes;
+
+		// SODA: ensure the collection do exists!
+		final Properties props = new Properties();
+		props.put("oracle.soda.sharedMetadataCache", "true");
+		props.put("oracle.soda.localMetadataCache", "true");
+
+		final OracleRDBMSClient cl = new OracleRDBMSClient(props);
+		final OracleDatabase db = cl.getDatabase(userConnection);
+		OracleCollection sodaCollection = db.openCollection(ret.collectionName);
+
+		REPORT.getCollection(ret.collectionName).mongoDBAPICompatible = mongoDBAPICompatible;
+		REPORT.getCollection(ret.collectionName).type = ret.type;
+
+		ret.emptyDestinationCollection = true;
+
+		if (sodaCollection == null) {
+			LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does not exist => creating it");
+			sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON, conf.collectionsProperties) : createClassicCollection(db, ret.collectionName, forceOSON);
+			if (sodaCollection == null) {
+				throw new IllegalStateException("Can't create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
+			} else {
+				ret.retrieveTableName(userConnection);
+			}
+		} else {
+			ret.retrieveTableName(userConnection);
+
+			try (Statement s = userConnection.createStatement()) {
+				try (ResultSet r = s.executeQuery("select count(1) from \"" + ret.tableName + "\" where rownum = 1")) {
+					if (r.next() && r.getInt(1) == 1) {
+						// THERE IS AT LEAST ONE ROW!
+						if (dropAlreadyExistingCollection) {
+							LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => dropping it (requested with --drop CLI argument)");
+							sodaCollection.admin().drop();
+							REPORT.getCollection(ret.collectionName).wasDropped = true;
+							LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
+							// TODO manage contentColumn data type:
+							// TODO 21c+ => JSON
+							// TODO 19c => BLOB if not autonomous database and not mongodb api compatible
+							// TODO 19c => BLOB OSON if autonomous database or not mongodb api compatible
+							sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON, conf.collectionsProperties) : createClassicCollection(db, ret.collectionName, forceOSON);
+							if (sodaCollection == null) {
+								throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
+							}
+						} else {
+							// avoid migrating data into non empty destination collection (no conflict to manage)
+							ret.emptyDestinationCollection = buildSecondaryIndexes;
+							return false;
+						}
+					} else {
+						if (dropAlreadyExistingCollection) {
+							LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist (with 0 row) => dropping it (requested with --drop CLI argument)");
+							sodaCollection.admin().drop();
+							REPORT.getCollection(ret.collectionName).wasDropped = true;
+							LOGGER.info((mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection does exist => re-creating it");
+							sodaCollection = mongoDBAPICompatible ? createMongoDBAPICompatibleCollection(db, ret.collectionName, forceOSON, conf.collectionsProperties) : createClassicCollection(db, ret.collectionName, forceOSON);
+							if (sodaCollection == null) {
+								throw new IllegalStateException("Can't re-create " + (mongoDBAPICompatible ? "MongoDB API compatible" : "SODA") + " collection: " + ret.collectionName);
+							}
+						}
+					}
+				}
 /*
                         for (Document indexMetadata : mongoCollection.listIndexes()) {
                             if (indexMetadata.getString("name").contains("$**") || "text".equals(indexMetadata.getEmbedded(Arrays.asList("key"), Document.class).getString("_fts"))) {
@@ -183,52 +227,78 @@ public class OracleCollectionInfo {
                             s.execute(String.format("CREATE SEARCH INDEX %s$search_index ON %s (json_document) FOR JSON PARAMETERS('DATAGUIDE OFF SYNC(MANUAL)')", collectionName, collectionName));
                             System.out.println("Created Search Index (manual sync) in " + getDurationSince(start));
                         } */
+			}
+		}
+
+		// save JSON constraint info to disable it and re-enable it later
+		try (PreparedStatement p = c.prepareStatement("select constraint_name, search_condition, status from all_constraints where owner=? and table_name=? and constraint_type='C'")) {
+			p.setString(1, ret.user);
+			p.setString(2, ret.tableName);
+
+			try (ResultSet r = p.executeQuery()) {
+				while (r.next()) {
+					final String constraintText = r.getString(2);
+					final String condition = constraintText.toLowerCase();
+					if (condition.contains("is json") && condition.contains(mongoDBAPICompatible ? "data" : "json_document")) {
+						ret.isJsonConstraintName = r.getString(1);
+						ret.isJsonConstraintEnabled = r.getString(3).equalsIgnoreCase("ENABLED");
+						ret.isJsonConstraintText = constraintText;
+						ret.isJsonConstraintIsOSONFormat = condition.contains("format oson");
+						LOGGER.info("IS JSON constraint found: " + ret.isJsonConstraintName + " for collection " + ret.collectionName);
+						break;
 					}
 				}
 			}
 
-			try (PreparedStatement p = c.prepareStatement("select constraint_name, search_condition, status from all_constraints where owner=? and table_name=? and constraint_type='C'")) {
-				p.setString(1, user);
-				p.setString(2, ret.tableName);
+			if (ret.isJsonConstraintName != null) {
+				LOGGER.info("Disabling Is JSON constraint: " + ret.isJsonConstraintName);
+				p.execute("alter table " + ret.user + ".\"" + ret.tableName + "\" disable constraint " + ret.isJsonConstraintName);
+			}
+		}
 
-				try (ResultSet r = p.executeQuery()) {
-					while (r.next()) {
-						final String constraintText = r.getString(2);
-						final String condition = constraintText.toLowerCase();
-						if (condition.contains("is json") && condition.contains(mongoDBAPICompatible ? "data" : "json_document")) {
-							ret.isJsonConstraintName = r.getString(1);
-							ret.isJsonConstraintEnabled = r.getString(3).equalsIgnoreCase("ENABLED");
-							ret.isJsonConstraintText = constraintText;
-							ret.isJsonConstraintIsOSONFormat = condition.contains("format oson");
-							LOGGER.info("IS JSON constraint found: " + ret.isJsonConstraintName + " for collection " + ret.collectionName);
-							break;
+		return true;
+	}
+
+	public static OracleCollectionInfo getCollectionInfoAndPrepareIt(PoolDataSource pds, PoolDataSource adminPDS, Configuration conf, String collectionName, boolean autonomousDatabase)
+			throws SQLException, OracleException {
+		final String user = conf.destinationUsername.toUpperCase();
+
+		final OracleCollectionInfo ret = new OracleCollectionInfo(user, collectionName, autonomousDatabase);
+		ret.type = conf.nativeJSONCollection ? CollectionType.JSON_COLLECTION_TABLE : CollectionType.SODA;
+
+		try (Connection c = adminPDS.getConnection()) {
+			try (Connection userConnection = pds.getConnection()) {
+				if (conf.nativeJSONCollection) {
+					if( !manageNativeJSONCollection(c, userConnection, ret, conf) ) {
+						return ret;
+					}
+				} else {
+					if (!manageSODACollection(c, userConnection, ret, conf)) {
+						return ret;
+					}
+				}
+
+				// eventually drop primary constraint and index
+				try (PreparedStatement p = c.prepareStatement("select index_name, status from all_indexes where table_owner=? and table_name=? and uniqueness='UNIQUE' and constraint_index='YES'")) {
+					p.setString(1, user);
+					p.setString(2, ret.tableName);
+
+					try (ResultSet r = p.executeQuery()) {
+						if (r.next()) {
+							ret.primaryKeyIndexName = r.getString(1);
+							ret.primaryKeyIndexStatus = r.getString(2);
+							LOGGER.info("Primary key found: " + ret.primaryKeyIndexName + " for collection " + ret.collectionName + " with status " + ret.primaryKeyIndexStatus);
 						}
 					}
-				}
 
-				if (ret.isJsonConstraintName != null) {
-					LOGGER.info("Disabling Is JSON constraint: " + ret.isJsonConstraintName);
-					p.execute("alter table " + user + ".\"" + ret.tableName + "\" disable constraint " + ret.isJsonConstraintName);
-				}
-			}
-
-			try (PreparedStatement p = c.prepareStatement("select index_name, status from all_indexes where table_owner=? and table_name=? and uniqueness='UNIQUE' and constraint_index='YES'")) {
-				p.setString(1, user);
-				p.setString(2, ret.tableName);
-
-				try (ResultSet r = p.executeQuery()) {
-					if (r.next()) {
-						ret.primaryKeyIndexName = r.getString(1);
-						ret.primaryKeyIndexStatus = r.getString(2);
-						LOGGER.info("Primary key found: " + ret.primaryKeyIndexName + " for collection " + ret.collectionName + " with status " + ret.primaryKeyIndexStatus);
+					if (ret.primaryKeyIndexName != null /*&& !autonomousDatabase*/) {
+						LOGGER.info("Dropping primary key and associated index: " + ret.primaryKeyIndexName + " for collection " + ret.collectionName);
+						LOGGER.info("Running: " + "alter table " + user + ".\"" + ret.tableName + "\" drop primary key drop index");
+						p.execute("alter table " + user + ".\"" + ret.tableName + "\" drop primary key drop index");
+//					p.execute("alter table " + user + ".\"" + ret.tableName + "\" drop column created_on");
+//					p.execute("alter table " + user + ".\"" + ret.tableName + "\" drop column last_modified");
+						LOGGER.info("Running: " + "alter table " + user + ".\"" + ret.tableName + "\" drop primary key drop index DONE!");
 					}
-				}
-
-				if (ret.primaryKeyIndexName != null /*&& !autonomousDatabase*/) {
-					LOGGER.info("Dropping primary key and associated index: " + ret.primaryKeyIndexName + " for collection " + ret.collectionName);
-					LOGGER.info("Running: " + "alter table " + user + ".\"" + ret.tableName + "\" drop primary key drop index");
-					p.execute("alter table " + user + ".\"" + ret.tableName + "\" drop primary key drop index");
-					LOGGER.info("Running: " + "alter table " + user + ".\"" + ret.tableName + "\" drop primary key drop index DONE!");
 				}
 			}
 		}
@@ -395,9 +465,6 @@ public class OracleCollectionInfo {
 								    "lastModifiedColumn" : {
 								        "name" : "LAST_MODIFIED"
 								    },
-								    "creationTimeColumn" : {
-								        "name" : "CREATED_ON"
-								    },
 								    "readOnly" : false
 								}""", "EMBEDDED_OID".equalsIgnoreCase(IDproperty) ? "\"assignmentMethod\" : \"EMBEDDED_OID\", \"path\" : \"_id\"" :
 								String.format("\"assignmentMethod\" : \"%s\"", IDproperty));
@@ -433,18 +500,18 @@ public class OracleCollectionInfo {
 		try (Connection c = mediumPDS.getConnection()) {
 			try (Statement s = c.createStatement()) {
 				if (!buildSecondaryIndexes) {
-					LOGGER.info("Enabling JSON constraint...");
 					if (isJsonConstraintName != null) {
 						LOGGER.info("Re-Enabling Is JSON constraint NOVALIDATE");
 						s.execute("alter table \"" + tableName + "\" modify constraint " + isJsonConstraintName + " enable novalidate");
+						LOGGER.info("OK");
 					}
 					else {
 						if (c.getMetaData().getDatabaseMajorVersion() == 19) {
 							LOGGER.info("Creating Is JSON constraint NOVALIDATE");
 							s.execute("alter table \"" + tableName + "\" add constraint " + collectionName + "_jd_is_json check (" + (mongoDBAPICompatible ? "data" : "json_document") + " is json format oson (size limit 32m)) novalidate");
+							LOGGER.info("OK");
 						}
 					}
-					LOGGER.info("OK");
 				}
 
 				// MOS 473656.1
@@ -470,30 +537,68 @@ public class OracleCollectionInfo {
 						}
 
 						if (false && autonomousDatabase && "UNUSABLE".equalsIgnoreCase(currentPKIndexStatus)) {
-
-
-							LOGGER.info("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-							s.execute("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-							LOGGER.info("Rebuild PK index with parallel degree of " + (2 * maxParallelDegree) + " in " + getDurationSince(start));
+							if(conf.skipPKIndexes) {
+								LOGGER.info("-- TODO\nALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree)+";");
+							} else {
+								LOGGER.info("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+								s.execute("ALTER INDEX " + primaryKeyIndexName + " REBUILD PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+								LOGGER.info("Rebuild PK index with parallel degree of " + (2 * maxParallelDegree) + " in " + getDurationSince(start));
+							}
 						}
 						else {
 							LOGGER.info("PK Index status is: " + currentPKIndexStatus);
 							if ("?".equals(currentPKIndexStatus)) {
-								LOGGER.info("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-								s.execute("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-								LOGGER.info("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " +  primaryKeyIndexName + " ENABLE NOVALIDATE");
-								s.execute("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + primaryKeyIndexName + " ENABLE NOVALIDATE");
-								LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+								if(conf.nativeJSONCollection) {
+									if(conf.skipPKIndexes) {
+										LOGGER.info("-- TODO\n"+"CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (RESID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree)+";\n"+
+												"ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (RESID) USING INDEX " + primaryKeyIndexName + " ENABLE NOVALIDATE;");
+									} else {
+										LOGGER.info("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (RESID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+										s.execute("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (RESID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+										LOGGER.info("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (RESID) USING INDEX " + primaryKeyIndexName + " ENABLE NOVALIDATE");
+										s.execute("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (RESID) USING INDEX " + primaryKeyIndexName + " ENABLE NOVALIDATE");
+										LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+									}
+								} else {
+									if(conf.skipPKIndexes) {
+										LOGGER.info("-- TODO\n"+"CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree)+";\n"+
+												"ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + primaryKeyIndexName + " ENABLE NOVALIDATE;");
+									} else {
+										LOGGER.info("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+										s.execute("CREATE UNIQUE INDEX " + user + "." + primaryKeyIndexName + " ON " + user + ".\"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+										LOGGER.info("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + primaryKeyIndexName + " ENABLE NOVALIDATE");
+										s.execute("ALTER TABLE " + user + ".\"" + tableName + "\" ADD CONSTRAINT " + primaryKeyIndexName + " PRIMARY KEY (ID) USING INDEX " + primaryKeyIndexName + " ENABLE NOVALIDATE");
+										LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+									}
+								}
 							}
 						}
 					}
 					else {
 						try {
-							LOGGER.info("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-							s.execute("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
-							LOGGER.info("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX PK_" + collectionName + " ENABLE NOVALIDATE");
-							s.execute("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX PK_" + collectionName + " ENABLE NOVALIDATE");
-							LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+							if(conf.nativeJSONCollection) {
+								if(conf.skipPKIndexes) {
+									LOGGER.info("-- TODO\n"+"CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (RESID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree)+";\n"+
+											"ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (RESID) USING INDEX PK_" + collectionName + " ENABLE NOVALIDATE;");
+								} else {
+									LOGGER.info("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (RESID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+									s.execute("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (RESID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+									LOGGER.info("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (RESID) USING INDEX PK_" + collectionName + " ENABLE NOVALIDATE");
+									s.execute("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (RESID) USING INDEX PK_" + collectionName + " ENABLE NOVALIDATE");
+									LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+								}
+							} else {
+								if(conf.skipPKIndexes) {
+									LOGGER.info("-- TODO\n"+"CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree)+";\n"+
+											"ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX PK_" + collectionName + " ENABLE NOVALIDATE;");
+								} else {
+									LOGGER.info("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+									s.execute("CREATE UNIQUE INDEX " + "PK_" + collectionName + " ON \"" + tableName + "\" (ID) PARALLEL" + (maxParallelDegree == -1 ? "" : " " + maxParallelDegree));
+									LOGGER.info("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX PK_" + collectionName + " ENABLE NOVALIDATE");
+									s.execute("ALTER TABLE \"" + tableName + "\" ADD CONSTRAINT PK_" + collectionName + " PRIMARY KEY (ID) USING INDEX PK_" + collectionName + " ENABLE NOVALIDATE");
+									LOGGER.info("Created PK constraint and index with parallel degree of " + maxParallelDegree + " in " + getDurationSince(start));
+								}
+							}
 						}
 						catch (SQLException sqle) {
 							sqle.printStackTrace();
@@ -539,7 +644,7 @@ public class OracleCollectionInfo {
 						for (Document indexMetadata : mongoCollection.listIndexes()) {
 							LOGGER.info(indexMetadata.toString());
 							if (indexMetadata.getLong("expireAfterSeconds") != null) {
-								LOGGER.warn("TTL index " + indexMetadata.getString("name") + " with data expiration after " + indexMetadata.getLong("expireAfterSeconds") + " seconds not recreated!");
+								LOGGER.info("TTL index " + indexMetadata.getString("name") + " with data expiration after " + indexMetadata.getLong("expireAfterSeconds") + " seconds not recreated!");
 							}
 							else if (indexMetadata.getString("name").contains("$**") || "text".equals(indexMetadata.getEmbedded(Arrays.asList("key"), Document.class).getString("_fts"))) {
 								needSearchIndex = true; //System.out.println("Need Search Index");
@@ -595,8 +700,13 @@ public class OracleCollectionInfo {
 								else if (is_IdPK(keys)) {
 									for(IndexReport ir : REPORT.getCollection(collectionName).indexes) {
 										if(ir.type == IndexType.PRIMARY_KEY) {
-											s.execute("alter index "+(primaryKeyIndexName != null ? primaryKeyIndexName : "PK_"+collectionName)+" rename to \""+ collectionName + "$"+indexMetadata.getString("name")+"\"");
-											REPORT.getCollection(collectionName).replaceIndex(ir.name,collectionName + "$"+indexMetadata.getString("name"));
+											if(conf.skipPKIndexes) {
+												LOGGER.info("-- TODO\n"+
+														"alter index " + (primaryKeyIndexName != null ? primaryKeyIndexName : "PK_" + collectionName) + " rename to \"" + collectionName + "$" + indexMetadata.getString("name") + "\";");
+											} else {
+												s.execute("alter index " + (primaryKeyIndexName != null ? primaryKeyIndexName : "PK_" + collectionName) + " rename to \"" + collectionName + "$" + indexMetadata.getString("name") + "\"");
+											}
+											REPORT.getCollection(collectionName).replaceIndex(ir.name, collectionName + "$" + indexMetadata.getString("name"));
 											break;
 										}
 									}
@@ -691,7 +801,7 @@ public class OracleCollectionInfo {
 						for (MetadataIndex indexMetadata : collectionMetadataDump.getIndexes()) {
 							LOGGER.info(indexMetadata.toString());
 							if (indexMetadata.isTtl()) {
-								LOGGER.warn("TTL index " + indexMetadata.getName() + " with data expiration after " + indexMetadata.getExpireAfterSeconds().value + " seconds not recreated!");
+								LOGGER.info("TTL index " + indexMetadata.getName() + " with data expiration after " + indexMetadata.getExpireAfterSeconds().value + " seconds not recreated!");
 							}
 							else if (indexMetadata.getName().contains("$**") || indexMetadata.getKey().text) {
 								needSearchIndex = true;
@@ -798,11 +908,11 @@ public class OracleCollectionInfo {
 									else {
 										final String indexSpec = String.format("{\"name\": \"%s\", \"fields\": [%s], \"unique\": %s}", collectionName + "$" + indexMetadata.getName(), getCreateIndexColumnsForMongoDBDump(collectionName, indexMetadata.getKey(), fieldsInfo, oracleVersion, false), indexMetadata.isUnique());
 
-										LOGGER.warn("Index has no column!");
-										LOGGER.warn(indexSpec);
+										LOGGER.info("Index has no column!");
+										LOGGER.info(indexSpec);
 										long start = System.currentTimeMillis();
 										gui.startIndex(indexMetadata.getName());
-										LOGGER.warn("Standard SODA index not created!");
+										LOGGER.info("Standard SODA index not created!");
 										gui.endIndex(indexMetadata.getName(), false);
 									}
 								}

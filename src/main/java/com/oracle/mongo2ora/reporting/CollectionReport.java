@@ -1,5 +1,7 @@
 package com.oracle.mongo2ora.reporting;
 
+import com.oracle.mongo2ora.migration.oracle.CollectionType;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +13,7 @@ public class CollectionReport {
 	public final boolean sampling;
 	public String tableName;
 	public boolean mongoDBAPICompatible;
+	public CollectionType type;
 	public boolean wasDropped;
 
 	public final List<IndexReport> indexes = new ArrayList<>();

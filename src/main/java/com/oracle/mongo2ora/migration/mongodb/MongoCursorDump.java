@@ -2,8 +2,6 @@ package com.oracle.mongo2ora.migration.mongodb;
 
 import com.mongodb.ServerAddress;
 import com.mongodb.ServerCursor;
-import com.mongodb.diagnostics.logging.Logger;
-import com.mongodb.diagnostics.logging.Loggers;
 import com.mongodb.internal.operation.BatchCursor;
 import org.bson.RawBsonDocument;
 
@@ -17,9 +15,10 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
-	private static final Logger LOGGER = Loggers.getLogger("MongoCursorDump");
+	private static final Logger LOGGER = LoggerFactory.getLogger("MongoCursorDump");
 	public final FindIterableDump<TResult> findIterable;
 	public final long count;
 	public long current;
@@ -175,7 +174,7 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 
 	@Override
 	public int available() {
-		LOGGER.warn(">>>>>>>>>>>>    available");
+		LOGGER.info(">>>>>>>>>>>>    available");
 		return 0;
 	}
 
@@ -191,19 +190,19 @@ public class MongoCursorDump<TResult> implements BatchCursor<TResult> {
 
 	@Override
 	public List<TResult> tryNext() {
-		LOGGER.warn(">>>>>>>>>>>>    tryNext");
+		LOGGER.info(">>>>>>>>>>>>    tryNext");
 		return null;
 	}
 
 	@Override
 	public ServerCursor getServerCursor() {
-		LOGGER.warn(">>>>>>>>>>>>    getServerCursor");
+		LOGGER.info(">>>>>>>>>>>>    getServerCursor");
 		return null;
 	}
 
 	@Override
 	public ServerAddress getServerAddress() {
-		LOGGER.warn(">>>>>>>>>>>>    getServerAddress");
+		LOGGER.info(">>>>>>>>>>>>    getServerAddress");
 		return null;
 	}
 }

@@ -6,6 +6,7 @@ import com.mongodb.Function;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoIterable;
+import com.mongodb.client.cursor.TimeoutMode;
 import com.mongodb.client.internal.MongoBatchCursorAdapter;
 import com.mongodb.client.model.Collation;
 import org.bson.BsonValue;
@@ -13,7 +14,9 @@ import org.bson.Document;
 import org.bson.conversions.Bson;
 
 import java.util.Collection;
+import java.util.Spliterator;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 public class FindIterableDump<TDocument> implements FindIterable<TDocument>  {
 	public final MongoCollectionDump<TDocument> mongoCollectionDump;
@@ -63,11 +66,6 @@ public class FindIterableDump<TDocument> implements FindIterable<TDocument>  {
 	}
 
 	@Override
-	public FindIterable<TDocument> oplogReplay(boolean b) {
-		return null;
-	}
-
-	@Override
 	public FindIterable<TDocument> partial(boolean b) {
 		return null;
 	}
@@ -80,6 +78,16 @@ public class FindIterableDump<TDocument> implements FindIterable<TDocument>  {
 	@Override
 	public MongoCursor<TDocument> iterator() {
 		return new MongoBatchCursorAdapter(new MongoCursorDump<>(this));
+	}
+
+	@Override
+	public void forEach(Consumer<? super TDocument> action) {
+		FindIterable.super.forEach(action);
+	}
+
+	@Override
+	public Spliterator<TDocument> spliterator() {
+		return FindIterable.super.spliterator();
 	}
 
 	@Override
@@ -159,6 +167,11 @@ public class FindIterableDump<TDocument> implements FindIterable<TDocument>  {
 
 	@Override
 	public FindIterable<TDocument> allowDiskUse(Boolean aBoolean) {
+		return null;
+	}
+
+	@Override
+	public FindIterable<TDocument> timeoutMode(TimeoutMode timeoutMode) {
 		return null;
 	}
 

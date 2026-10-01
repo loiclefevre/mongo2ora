@@ -44,6 +44,7 @@ public class XYTerminalOutput {
 	}
 
 	public XYTerminalOutput write(CharSequence s) throws NativeException {
+		if(s == null) return this;
 		x += s.length();
 		term.write(s);
 		return this;

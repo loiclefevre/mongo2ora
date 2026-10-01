@@ -7,8 +7,6 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
-import com.mongodb.diagnostics.logging.Logger;
-import com.mongodb.diagnostics.logging.Loggers;
 import com.oracle.mongo2ora.asciigui.ASCIIGUI;
 import com.oracle.mongo2ora.migration.Configuration;
 import com.oracle.mongo2ora.migration.ConversionInformation;
@@ -57,6 +55,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.zip.GZIPInputStream;
 
 import static com.mongodb.client.model.Projections.include;
@@ -105,9 +105,9 @@ import static org.bson.MyBSONToOSONConverter.KEYS_SIZE;
  * - help migration using properties file for per collection configuration (range partitioning, SODA collection columns, types etc..., filtering...)
  */
 public class Main {
-	public static final String VERSION = "1.3.2";
+	public static final String VERSION = "1.3.3";
 
-	private static final Logger LOGGER = Loggers.getLogger("main");
+	private static final Logger LOGGER = LoggerFactory.getLogger("main");
 
 	public static boolean ENABLE_COLORS = true;
 
@@ -191,6 +191,9 @@ public class Main {
 		LOGGER.info("mongo2ora v" + VERSION + " started!");
 		Security.setProperty("networkaddress.cache.ttl", "0"); // For Autonomous Database CMAN load balancing
 		System.setProperty("oracle.jdbc.fanEnabled", "false");
+		// disable JDBC DMS
+		System.setProperty( "oracle.dms.console.DMSConsole", "oracle.dms.instrument_stub.DMSConsole");
+		System.setProperty( "oracle.ucp.wls.jta", "false");
 
 		Locale.setDefault(Locale.US);
 
@@ -221,7 +224,7 @@ public class Main {
 		//----------------------------------------------------------------------------------------------
 		//LOGGER.info("COUNTER THREADS=" + Math.min(conf.cores * 2, Runtime.getRuntime().availableProcessors()));
 		counterThreadPool = Executors.newVirtualThreadPerTaskExecutor();
-		LOGGER.info("WORKER THREADS=" + conf.cores);
+        LOGGER.info("WORKER THREADS={}", conf.cores);
 		workerThreadPool = counterThreadPool;
 
 		if (conf.compressionLevel > 0) {
@@ -229,16 +232,16 @@ public class Main {
 				LOGGER.info("Compression level: " + conf.compressionLevel);
 			}
 			else {
-				LOGGER.error("Compression requested while Advanced Compression Option not explicitely enabled!");
-				Configuration.displayUsage("Compression requested while Advanced Compression Option not explicitely enabled!");
+				LOGGER.error("Compression requested while Advanced Compression Option not explicitly enabled!");
+				Configuration.displayUsage("Compression requested while Advanced Compression Option not explicitly enabled!");
 			}
 		}
 	}
 
 	private static void displayOSONSettings(Configuration conf) {
 		LOGGER.info("OSON settings:");
-		LOGGER.info("- allow duplicate keys: " + conf.allowDuplicateKeys);
-		LOGGER.info("- compression level: " + conf.compressionLevel);
+        LOGGER.info("- allow duplicate keys: {}", conf.allowDuplicateKeys);
+        LOGGER.info("- compression level: {}", conf.compressionLevel);
 
 		boolean notIn23c = false;
 		if (ORACLE_MAJOR_VERSION < 23) {
@@ -257,10 +260,12 @@ public class Main {
 
 	public static void main(final String[] args) {
 		try {
+			// setup some system properties
+			// initialize the colored terminal
 			initialize();
 
 			// Create configuration related to command line args
-			final Configuration conf = Configuration.prepareConfiguration(args);
+			final Configuration conf = Configuration.prepareConfiguration(REPORT,args);
 
 			postInitialize(conf);
 
@@ -301,24 +306,33 @@ public class Main {
 						.build();
 
 		try (MongoClient mongoClient = MongoClients.create(settings)) {
-			final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.cores);
+			LOGGER.info("Connected to MongoDB!");
+			MongoDatabase mongoDatabase = mongoClient.getDatabase(conf.sourceDatabase);
+			final Document result = mongoDatabase.runCommand(new Document("buildInfo", 1));
+			gui.setsourceDatabaseVersion((String) result.get("version"));
+            LOGGER.info("MongoDB version is {}", result.get("version"));
+
 			final PoolDataSource adminPDS = initializeConnectionPool(true, conf.destinationConnectionString, conf.destinationAdminUser, conf.destinationAdminPassword, 3);
-			conf.initializeMaxParallelDegree(adminPDS);
 			gui.setPDS(adminPDS);
+			LOGGER.info("Initialized Oracle admin connection pool.");
 
 			// Get destination database information
 			displayOracleDatabaseVersion(adminPDS);
+			LOGGER.info("Oracle database version retrieved.");
 
 			displayOSONSettings(conf);
+
+			conf.initializeMaxParallelDegree(adminPDS);
+			LOGGER.info("Oracle maximum parallel degree initialized.");
+
+			final PoolDataSource pds = initializeConnectionPool(false, conf.destinationConnectionString, conf.destinationUsername, conf.destinationPassword, conf.cores);
+			LOGGER.info("Initialized Oracle target schema connection pool.");
 
 			// Grant create job and CTX_DDL for managing Search indexes...
 			grantPrivilegesToDestinationUser(conf, adminPDS);
 
-			MongoDatabase mongoDatabase = mongoClient.getDatabase(conf.sourceDatabase);
-			final Document result = mongoDatabase.runCommand(new Document("buildInfo", 1));
-			gui.setsourceDatabaseVersion((String) result.get("version"));
-
 			// get number of collections and indexes in this database
+			LOGGER.info("Now gathering MongoDB database...");
 			MONGODB_COLLECTIONS = MONGODB_INDEXES = 0;
 			for (Document d : mongoDatabase.listCollections()) {
 				if (conf.selectedCollections.isEmpty() || conf.selectedCollections.contains(d.getString("name"))) {
@@ -330,6 +344,9 @@ public class Main {
 					}
 				}
 			}
+			LOGGER.info("- {} collections found", MONGODB_COLLECTIONS);
+			LOGGER.info("- {} indexes found", MONGODB_INDEXES);
+
 			gui.setNumberOfMongoDBCollections(MONGODB_COLLECTIONS);
 			gui.setNumberOfMongoDBIndexes(MONGODB_INDEXES);
 			gui.setNumberOfMongoDBJSONDocuments(0);
@@ -340,8 +357,10 @@ public class Main {
 
 			// Disabling Automatic ADB-S tasks if any
 			OracleAutoTasks.disableIfNeeded(adminPDS);
+			LOGGER.info("Oracle database automated tasks disabled.");
 
 			final PoolDataSource mediumPDS = MediumServiceManager.configure(adminPDS, pds, conf.destinationPassword);
+			LOGGER.info("Oracle database medium database pool reconfigured.");
 
 			final Semaphore DB_SEMAPHORE = new Semaphore(conf.cores);
 
@@ -363,7 +382,7 @@ public class Main {
 				final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf, collectionName, AUTONOMOUS_DATABASE);
 
 				if (!oracleCollectionInfo.emptyDestinationCollection) {
-					LOGGER.warn("Collection " + collectionName + " will not be migrated because destination is not empty!");
+					LOGGER.info("Collection " + collectionName + " will not be migrated because destination is not empty!");
 					continue;
 				}
 
@@ -434,7 +453,7 @@ public class Main {
 						if (/*"STANDARD".equalsIgnoreCase(MAX_STRING_SIZE) &&*/ "EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
 							try (Connection c = pds.getConnection()) {
 								try (Statement s = c.createStatement()) {
-									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" drop column id");
+									// s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" drop column id");
 								}
 							}
 						}
@@ -455,7 +474,7 @@ public class Main {
 							publishingCfsConvert.add(pCf);
 
 							workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-									new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing, conf.flushSize) :
+									new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing, conf.flushSize, conf.nativeJSONCollection, REPORT.internal) :
 									new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 
 							i++;
@@ -478,13 +497,15 @@ public class Main {
 					REPORT.getCollection(oracleCollectionInfo.getCollectionName()).loadDurationInMS = System.currentTimeMillis() - startClusterAnalysis;
 
 					// source == mongodump
-					if (ORACLE_MAJOR_VERSION >= 23) {
+					if (ORACLE_MAJOR_VERSION >= 23 && !conf.nativeJSONCollection) {
 						String IDproperty = conf.collectionsProperties.getProperty(collectionName + ".ID", "EMBEDDED_OID");
 
 						if (/*"STANDARD".equalsIgnoreCase(MAX_STRING_SIZE) &&*/ "EMBEDDED_OID".equalsIgnoreCase(IDproperty)) {
 							try (Connection c = pds.getConnection()) {
 								try (Statement s = c.createStatement()) {
+									LOGGER.info("Adding ID column to table...");
 									s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" add id AS (JSON_VALUE(\"DATA\" FORMAT OSON , '$._id' RETURNING ANY ORA_RAWCOMPARE NO ARRAY ERROR ON ERROR)) MATERIALIZED NOT NULL ENABLE");
+									LOGGER.info("ID column added.");
 								}
 							}
 						}
@@ -532,14 +553,14 @@ public class Main {
 				s.execute("grant execute on CTX_DDL to " + conf.destinationUsername.toUpperCase());
 			}
 			catch (SQLException ignored) {
-				LOGGER.warn("Unable to grant execute on CTX_DDL!");
+				LOGGER.info("Unable to grant execute on CTX_DDL!");
 			}
 
 			try (Statement s = c.createStatement()) {
 				s.execute("grant create job to " + conf.destinationUsername.toUpperCase());
 			}
 			catch (SQLException ignored) {
-				LOGGER.warn("Unable to grant create job!");
+				LOGGER.info("Unable to grant create job!");
 			}
 		}
 	}
@@ -595,7 +616,7 @@ public class Main {
 				final OracleCollectionInfo oracleCollectionInfo = OracleCollectionInfo.getCollectionInfoAndPrepareIt(pds, adminPDS, conf, collectionName, AUTONOMOUS_DATABASE);
 
 				if (!oracleCollectionInfo.emptyDestinationCollection) {
-					LOGGER.warn("Collection " + collectionName + " will not be migrated because destination is not empty!");
+					LOGGER.info("Collection " + collectionName + " will not be migrated because destination is not empty!");
 					continue;
 				}
 
@@ -765,7 +786,7 @@ public class Main {
 						}
 
 						workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-								new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, GUNZIP_SEMAPHORE, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing, conf.flushSize) :
+								new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, GUNZIP_SEMAPHORE, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing, conf.flushSize, conf.nativeJSONCollection, REPORT.internal) :
 								new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 
 						i++;
@@ -808,7 +829,7 @@ public class Main {
 				CollectionCluster cc = new CollectionCluster(clusterCount, clusterStartPosition, (int) (position - clusterStartPosition), bufferToWorkOn);
 
 				workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-						new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing, conf.flushSize) :
+						new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing, conf.flushSize, conf.nativeJSONCollection, REPORT.internal) :
 						new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 
 				gui.updateSourceDatabaseDocuments(clusterCount, (long) ((double) (position - clusterStartPosition) / (double) clusterCount));
@@ -912,7 +933,7 @@ public class Main {
 				publishingCfsConvert.add(pCf);
 
 				workerThreadPool.execute(AUTONOMOUS_DATABASE || ORACLE_MAJOR_VERSION >= 21 || conf.mongodbAPICompatible || conf.forceOSON ?
-						new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing, conf.flushSize) :
+						new DirectDirectPathBSON2OSONCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize, DB_SEMAPHORE, conf.mongodbAPICompatible, ORACLE_MAJOR_VERSION, conf.collectionsProperties, conf.allowDuplicateKeys, null, conf.relativeOffsets, conf.lastValueSharing, conf.simpleValueSharing, conf.flushSize, conf.nativeJSONCollection, REPORT.internal) :
 						new BSON2TextCollectionConverter(i % 256, oracleCollectionInfo.getCollectionName(), oracleCollectionInfo.getTableName(), cc, pCf, mongoDatabase, pds, gui, conf.batchSize));
 
 				i++;
@@ -983,12 +1004,15 @@ public class Main {
 					try (Statement s = c.createStatement()) {
 						switch (conf.compressionLevel) {
 							case 1:
+								s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" compress for oltp");
 								s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move json(data) as (compress low)");
 								break;
 							case 2:
+								s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" compress for oltp");
 								s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move json(data) as (compress medium)");
 								break;
 							case 3:
+								s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" compress for oltp");
 								s.execute("alter table \"" + oracleCollectionInfo.getTableName() + "\" move json(data) as (compress high)");
 								break;
 						}
@@ -1094,7 +1118,7 @@ public class Main {
 
 	private static PoolDataSource initializeConnectionPool(boolean admin, String ajdConnectionService, String user, String password, int cores) throws SQLException, IOException {
 		PoolDataSource pds = PoolDataSourceFactory.getPoolDataSource();
-		pds.setConnectionFactoryClassName("oracle.jdbc.pool.OracleDataSource");
+	 	pds.setConnectionFactoryClassName("oracle.jdbc.pool.OracleDataSource");
 		//pds.setConnectionFactoryClassName("oracle.jdbc.datasource.impl.OracleDataSource");
 
 		if (ajdConnectionService.toLowerCase().trim().startsWith("(")) {
@@ -1118,6 +1142,7 @@ public class Main {
 		//pds.setMaxConnectionReuseCount(5000);
 		//pds.setConnectionValidationTimeout();
 		//pds.setSecondsToTrustIdleConnection(1);
+		pds.setConnectionProperty(OracleConnection.CONNECTION_PROPERTY_THIN_NET_CONNECT_TIMEOUT, "5000");
 		pds.setConnectionProperty(OracleConnection.CONNECTION_PROPERTY_ENABLE_AC_SUPPORT, "false");
 		pds.setConnectionProperty(OracleConnection.CONNECTION_PROPERTY_DEFAULT_ROW_PREFETCH, "20");
 		pds.setConnectionProperty("tcp.nodelay", "yes");
@@ -1125,6 +1150,7 @@ public class Main {
 		pds.setConnectionProperty("oracle.jdbc.thinForceDNSLoadBalancing", "true");
 
 
+		LOGGER.info("- now initializing all connections...");
 		final Connection[] cons = new Connection[cores];
 
 		for (int i = 0; i < cons.length; i++) {
@@ -1135,6 +1161,8 @@ public class Main {
 		for (int i = 0; i < cons.length; i++) {
 			cons[i].close();
 		}
+		LOGGER.info("- done.");
+
 		return pds;
 	}
 }
