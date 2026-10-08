@@ -1,2 +1,5 @@
 [
+  { "interfaces": [ "oracle.proteus.runtime.Replayable" ] },
+  { "interfaces": [ "oracle.proteus.runtime.ProxyFactory" ] },
+  { "interfaces": [ "oracle.ucp.jdbc.proxy.LogicalObject" ] }
 ]

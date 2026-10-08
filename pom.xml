@@ -362,6 +362,7 @@
                         <buildArg>-H:+AddAllCharsets</buildArg>
                         <buildArg>-Doracle.jdbc.fanEnabled=false</buildArg>
                         <buildArg>-Dnetworkaddress.cache.ttl=0</buildArg>
+                        <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
 
                         <!-- Serial GC -->
                         <!-- buildArg>- -gc=serial</buildArg>
@@ -381,7 +382,7 @@
 
                         <!-- Profile Guided Optimization, GraalVM EE only -->
                         <!-- buildArg>- -pgo-instrument</buildArg -->
-			            <buildArg>--pgo=${project.basedir}/default.iprof</buildArg>
+			            <!-- buildArg>- -pgo=${project.basedir}/default.iprof</buildArg -->
 
                         <!-- buildArg>-XX:+UnlockExperimentalVMOptions</buildArg>
                         <buildArg>-XX:G1MaxNewSizePercent=80</buildArg -->
@@ -408,6 +409,9 @@
 			<buildArg>--initialize-at-build-time=oracle.i18n.text.converter.CharacterConverterGBK</buildArg>
 			<buildArg>--initialize-at-build-time=oracle.i18n.text.converter.CharacterConverterSJIS</buildArg>
 			<buildArg>--initialize-at-build-time=oracle.i18n.text.converter.CharacterConverterZHTEUC</buildArg>
+            <buildArg>--initialize-at-build-time=oracle.proteus.gen.DynamicProxyFactory</buildArg>
+            <buildArg>--initialize-at-build-time=oracle.ucp.jdbc.proxy.UCPReplayableOracleProxy$ProteusProxyInstantiatorImpl</buildArg>
+            <buildArg>--initialize-at-build-time=oracle.ucp.jdbc.proxy.oracle.OracleConnectionProxyFactory</buildArg>
 			
                         <!-- buildArg>-initialize-at-run-time=oracle.dms.console.DMSConsole</buildArg -->
                         <!-- buildArg>- -features=oracle.nativeimage.CharacterSetFeature</buildArg -->

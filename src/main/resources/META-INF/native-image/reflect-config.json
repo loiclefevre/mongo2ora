@@ -1,4 +1,32 @@
-[
+ [
+{
+       "name":"oracle.ucp.jdbc.proxy.UCPOracleProxy$ProteusProxyInstantiatorImpl",
+           "allDeclaredMethods": true,
+           "allDeclaredFields": true,
+           "allDeclaredConstructors": true,
+           "allPublicMethods": true,
+           "allPublicFields": true,
+           "allPublicConstructors": true,
+           "queryAllDeclaredMethods": true,
+           "queryAllDeclaredConstructors": true,
+           "queryAllPublicMethods": true,
+           "queryAllPublicConstructors": true,
+           "unsafeAllocated": true
+},
+{
+   "name":"oracle.ucp.jdbc.proxy.UCPReplayableOracleProxy$ProteusProxyInstantiatorImpl",
+         "allDeclaredMethods": true,
+         "allDeclaredFields": true,
+         "allDeclaredConstructors": true,
+         "allPublicMethods": true,
+         "allPublicFields": true,
+        "allPublicConstructors": true,
+         "queryAllDeclaredMethods": true,
+         "queryAllDeclaredConstructors": true,
+         "queryAllPublicMethods": true,
+         "queryAllPublicConstructors": true,
+        "unsafeAllocated": true
+},
 {
   "name":"[B"
 },

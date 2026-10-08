@@ -9,7 +9,13 @@
     }, 
     {
       "pattern":"\\Qlog4j.properties\\E"
-    }, 
+    },
+    {
+      "pattern":"\\Qlogging.properties\\E"
+    },
+    {
+      "pattern":"\\Qsimplelogger.properties\\E"
+    },
     {
       "pattern":"\\Qnet/rubygrapefruit/platform/linux-aarch64-ncurses6/libnative-platform-curses.so\\E"
     }, 
@@ -71,30 +77,22 @@
       "classNames":["oracle.jdbc.driver.ErrorMessages"]
     }, 
     {
-      "name":"oracle.jdbc.driver.Messages",
-      "locales":[
-        "", 
-        "und"
-      ]
-    }, 
+      "name":"oracle.jdbc.driver.Messages"
+    },
     {
       "name":"oracle.jdbc.driver.json.ErrorMessagesJson",
       "classNames":["oracle.jdbc.driver.json.ErrorMessagesJson"]
     }, 
     {
-      "name":"oracle.net.mesg.Message",
-      "locales":["und"]
+      "name":"oracle.net.mesg.Message"
     }, 
     {
       "name":"oracle.net.mesg.NetErrorMessages",
       "classNames":["oracle.net.mesg.NetErrorMessages"]
     }, 
     {
-      "name":"oracle.ucp.util.UCPMessages",
-      "locales":[
-        "", 
-        "und"
-      ]
-    }
+      "name":"oracle.ucp.util.UCPMessages"
+    },
+    {"name":"oracle.net.jdbc.nl.mesg.NLSR"}
   ]
 }
